@@ -6,6 +6,11 @@ import { useRecords } from "../../lib/useRecords";
 import { db } from "../../lib/supabase";
 import { errorMessage, remove } from "../../lib/api";
 import type { Project, Conversation } from "../../lib/types";
+import {
+  RelationshipExplorer,
+  type RelationshipNode,
+  type RelationshipEdge,
+} from "../../components/RelationshipExplorer";
 export function Projects() {
   const records = useRecords<Project>("projects");
   const conversations = useRecords<Conversation>("conversations");
@@ -16,6 +21,7 @@ export function Projects() {
     target_provider: string;
     note: string;
     created_at: string;
+    destination_connection_id?: string;
   }>("project_handoffs");
   const agents = useRecords<{
     id: string;
@@ -25,12 +31,105 @@ export function Projects() {
     state: string;
   }>("agent_connections");
   const [handoffSource, setHandoffSource] = useState("");
-  const [handoffTarget, setHandoffTarget] = useState("other");
+  const [handoffTarget, setHandoffTarget] = useState("");
+  const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+  const projectMemories = useRecords<{
+    id: string;
+    project_id: string;
+    content: string;
+    status: string;
+    updated_at: string;
+  }>("memories");
   const [handoffNote, setHandoffNote] = useState("");
   const { workspace } = useWorkspace();
   const [selected, setSelected] = useState<Project | "new" | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [graphProject, setGraphProject] = useState("");
+  const focusedProject =
+    records.data.find((p) => p.id === graphProject) || records.data[0];
+  const graphNodes: RelationshipNode[] = focusedProject
+    ? [
+        {
+          id: focusedProject.id,
+          label: focusedProject.name,
+          kind: "Project",
+          detail:
+            focusedProject.instructions ||
+            focusedProject.description ||
+            "Project context",
+          action: () => setSelected(focusedProject),
+          actionLabel: "Open project and handoffs",
+        },
+        ...projectMemories.data
+          .filter((m) => m.project_id === focusedProject.id)
+          .slice(0, 4)
+          .map((m) => ({
+            id: m.id,
+            label: m.content,
+            kind: "Memory",
+            detail: `${m.status} · ${m.updated_at}`,
+          })),
+        ...conversations.data
+          .filter((c) => c.project_id === focusedProject.id)
+          .slice(0, 4)
+          .map((c) => ({
+            id: c.id,
+            label: c.title,
+            kind: "Conversation",
+            detail: `${c.platform} · ${c.processing_status}${c.excluded ? " · excluded" : ""}`,
+          })),
+        ...agents.data
+          .filter((a) => a.project_ids?.includes(focusedProject.id))
+          .slice(0, 4)
+          .map((a) => ({
+            id: a.id,
+            label: a.name,
+            kind: "Credential",
+            detail: `${a.provider} · ${a.state} · explicit project grant`,
+          })),
+        ...handoffs.data
+          .filter((h) => h.project_id === focusedProject.id)
+          .slice(0, 3)
+          .map((h) => ({
+            id: h.id,
+            label: h.note || "Handoff",
+            kind: "Handoff",
+            detail: `Destination: ${h.target_provider} · ${h.created_at}`,
+          })),
+      ]
+    : [];
+  const graphEdges: RelationshipEdge[] = focusedProject
+    ? graphNodes
+        .filter((n) => n.id !== focusedProject.id)
+        .map((n) => ({
+          from: focusedProject.id,
+          to: n.id,
+          label:
+            n.kind === "Credential"
+              ? "Explicit project grant"
+              : "Project association",
+        }))
+    : [];
+  handoffs.data
+    .filter((h) => graphNodes.some((n) => n.id === h.id))
+    .forEach((h) => {
+      if (graphNodes.some((n) => n.id === h.conversation_id))
+        graphEdges.push({
+          from: h.conversation_id,
+          to: h.id,
+          label: "Handoff source",
+        });
+      if (
+        h.destination_connection_id &&
+        graphNodes.some((n) => n.id === h.destination_connection_id)
+      )
+        graphEdges.push({
+          from: h.id,
+          to: h.destination_connection_id,
+          label: "Reviewed destination; current permissions still apply",
+        });
+    });
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -82,6 +181,29 @@ export function Projects() {
         </button>
       </div>
       {records.error && <Notice error>{records.error}</Notice>}
+      {focusedProject && (
+        <>
+          <label className="relationship-project-select">
+            Visualize project
+            <select
+              value={focusedProject.id}
+              onChange={(e) => setGraphProject(e.target.value)}
+            >
+              {records.data.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <RelationshipExplorer
+            title="Project context map"
+            nodes={graphNodes}
+            edges={graphEdges}
+            caption="Authorized loaded records. Up to four memories, sources, credentials and three handoffs are shown for this project; use project details for all loaded records."
+          />
+        </>
+      )}
       {records.loading ? (
         <p role="status">Loading projects…</p>
       ) : records.data.length ? (
@@ -199,6 +321,16 @@ export function Projects() {
             </div>
             {selected !== "new" && (
               <>
+                <h3>Recent project context</h3>
+                {projectMemories.data
+                  .filter((m) => m.project_id === selected.id)
+                  .slice(0, 10)
+                  .map((m) => (
+                    <p key={m.id}>
+                      {m.content} · {m.status} ·{" "}
+                      {new Date(m.updated_at).toLocaleString()}
+                    </p>
+                  ))}
                 <h3>Connected agents</h3>
                 <p>
                   {agents.data
@@ -251,11 +383,28 @@ export function Projects() {
                 </label>
                 <label>
                   Intended recipient
-                  <input
-                    maxLength={50}
+                  <select
                     value={handoffTarget}
-                    onChange={(e) => setHandoffTarget(e.target.value)}
-                  />
+                    onChange={(e) => {
+                      setHandoffTarget(e.target.value);
+                      setPreview(null);
+                    }}
+                  >
+                    <option value="">
+                      Select an authorized destination agent
+                    </option>
+                    {agents.data
+                      .filter(
+                        (a) =>
+                          a.project_ids.includes(selected.id) &&
+                          a.state !== "revoked",
+                      )
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({a.provider})
+                        </option>
+                      ))}
+                  </select>
                 </label>
                 <label>
                   Handoff note
@@ -278,15 +427,14 @@ export function Projects() {
                     setBusy(true);
                     setError("");
                     try {
-                      const r = await db().rpc("create_handoff", {
+                      const r = await db().rpc("prepare_handoff", {
                         p_project: selected.id,
                         p_conversation: handoffSource,
-                        p_target: handoffTarget,
+                        p_destination: handoffTarget,
                         p_note: handoffNote,
                       });
                       if (r.error) throw r.error;
-                      setHandoffNote("");
-                      await handoffs.reload();
+                      setPreview(r.data);
                     } catch (e) {
                       setError(errorMessage(e));
                     } finally {
@@ -294,8 +442,47 @@ export function Projects() {
                     }
                   }}
                 >
-                  Save source-linked handoff
+                  Preview context to share
                 </button>
+                {preview && (
+                  <section className="source-evidence">
+                    <h3>Review the exact context package</h3>
+                    <pre>{JSON.stringify(preview, null, 2)}</pre>
+                    <p>
+                      The destination must still have permission when it
+                      retrieves this handoff. Corrections and source exclusions
+                      apply at retrieval.
+                    </p>
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        setError("");
+                        try {
+                          const r = await db().rpc("confirm_handoff", {
+                            p_project: selected.id,
+                            p_conversation: handoffSource,
+                            p_destination: handoffTarget,
+                            p_note: handoffNote,
+                            p_reviewed: preview,
+                          });
+                          if (r.error) throw r.error;
+                          setPreview(null);
+                          setHandoffNote("");
+                          await handoffs.reload();
+                        } catch (e) {
+                          setError(errorMessage(e));
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Confirm and share with this agent
+                    </button>
+                  </section>
+                )}
               </>
             )}
           </form>

@@ -4,27 +4,41 @@ import { Search, ArrowUpRight } from "lucide-react";
 import { useRecords } from "../../lib/useRecords";
 import { db } from "../../lib/supabase";
 import { errorMessage, updateMemory, remove } from "../../lib/api";
-import { categories } from "../../lib/memory";
+import { categories as originalCategories } from "../../lib/memory";
+import { selfHosted } from "../../lib/localBackend";
 import type { Memory, Project, Source, Version } from "../../lib/types";
 import { Empty, Notice, Modal } from "../../components/ui";
+import { useWorkspace } from "../../components/AppLayout";
+import { useRpc } from "../../lib/product";
+import { MemoryRelationships } from "../../components/MemoryRelationships";
+const categories: readonly string[] = selfHosted ? [...originalCategories, "Technical architecture", "Coding conventions"] : originalCategories;
 export function Memories() {
-  const records = useRecords<Memory>("memories");
+  const { workspace } = useWorkspace();
   const projects = useRecords<Project>("projects");
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [project, setProject] = useState("all");
+  const [platform, setPlatform] = useState("all");
+  const platforms = useRpc<string[]>("memory_platforms", {
+    p_workspace: workspace.id,
+  });
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Memory | null>(null);
   const status = params.get("status") || "active";
-  const filtered = records.data.filter(
-    (m) =>
-      (status === "all" || m.status === status) &&
-      (category === "all" || m.category === category) &&
-      (project === "all" || m.project_id === project) &&
-      m.content.toLowerCase().includes(query.toLowerCase()),
-  );
-  useEffect(() => setPage(1), [query, category, project, status]);
+  const search = useRpc<{ items: Memory[]; total: number }>("search_memories", {
+    p_workspace: workspace.id,
+    p_query: query,
+    p_status: status,
+    p_category: category === "all" ? null : category,
+    p_project: project === "all" ? null : project,
+    p_platform: platform === "all" ? null : platform,
+    p_offset: (page - 1) * 15,
+  });
+  const records = { ...search, data: search.data?.items || [] };
+  const filtered = records.data;
+  const total = search.data?.total || 0;
+  useEffect(() => setPage(1), [query, category, project, status, platform]);
   return (
     <>
       <div className="page-header">
@@ -46,11 +60,7 @@ export function Memories() {
             onClick={() => setParams({ status: s })}
           >
             {s === "pending" ? "Review queue" : s[0].toUpperCase() + s.slice(1)}
-            {s === "pending" && (
-              <span>
-                {records.data.filter((m) => m.status === "pending").length}
-              </span>
-            )}
+            {s === "pending" && status === "pending" && <span>{total}</span>}
           </button>
         ))}
       </div>
@@ -80,17 +90,28 @@ export function Memories() {
           onChange={(e) => setProject(e.target.value)}
         >
           <option value="all">All projects</option>
+          <option value="global">Global context</option>
           {projects.data.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
         </select>
-        <span className="small-text">
-          Newest first · {filtered.length} results
-        </span>
+        <span className="small-text">Full-text search · {total} results</span>
       </div>
       {records.error && <Notice error>{records.error}</Notice>}
+      {platforms.error && <Notice error>{platforms.error}</Notice>}
+      <label>
+        Source platform
+        <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+          <option value="all">All source platforms</option>
+          {(platforms.data || []).map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
       {records.loading ? (
         <p role="status">Loading memories…</p>
       ) : filtered.length ? (
@@ -107,7 +128,7 @@ export function Memories() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice((page - 1) * 15, page * 15).map((m) => (
+                {filtered.map((m) => (
                   <tr key={m.id}>
                     <td>
                       <button
@@ -155,11 +176,11 @@ export function Memories() {
               Previous
             </button>
             <span>
-              Page {page} of {Math.max(1, Math.ceil(filtered.length / 15))}
+              Page {page} of {Math.max(1, Math.ceil(total / 15))}
             </span>
             <button
               className="button secondary small"
-              disabled={page * 15 >= filtered.length}
+              disabled={page * 15 >= total}
               onClick={() => setPage(page + 1)}
             >
               Next
@@ -179,12 +200,6 @@ export function Memories() {
             : "Import a conversation to create source-linked memory proposals."}
         </Empty>
       )}
-      {records.data.length === 1000 && (
-        <Notice>
-          Showing the newest 1,000 records. Export your workspace to retrieve
-          all records.
-        </Notice>
-      )}
       {selected && (
         <MemoryDetail
           memory={selected}
@@ -193,6 +208,13 @@ export function Memories() {
             await records.reload();
             setSelected(null);
           }}
+        />
+      )}
+      {!records.loading && records.data.length > 0 && (
+        <MemoryRelationships
+          memories={records.data}
+          projects={projects.data}
+          onOpen={setSelected}
         />
       )}
     </>

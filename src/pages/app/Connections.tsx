@@ -4,9 +4,11 @@ import { Plus, RefreshCw, KeyRound } from "lucide-react";
 import { useWorkspace } from "../../components/AppLayout";
 import { useRecords } from "../../lib/useRecords";
 import { db } from "../../lib/supabase";
+import { selfHosted } from "../../lib/localBackend";
 import { errorMessage } from "../../lib/api";
 import { Notice, Modal, Empty } from "../../components/ui";
 import type { Project, Conversation } from "../../lib/types";
+import { RelationshipExplorer } from "../../components/RelationshipExplorer";
 
 export const providers = [
   "chatgpt",
@@ -217,8 +219,9 @@ export function Connections() {
         </button>
       </div>
       <Notice>
-        Connection method: scoped token over the Continuum CLI or local MCP
-        server. No provider OAuth or automatic chat capture is available.
+        {selfHosted
+          ? "Use a scoped token with the local Python MCP server, existing CLI, or the authorized browser extension. Enable capture separately for extension credentials; provider OAuth is not configured."
+          : "Connection method: scoped token over the Continuum CLI or local MCP server. No provider OAuth or automatic chat capture is available."}
         Provider names identify your intended source or client; live provider
         compatibility has not been verified.
       </Notice>
@@ -247,59 +250,91 @@ export function Connections() {
       {records.loading ? (
         <p role="status">Loading connections…</p>
       ) : records.data.length ? (
-        <section className="app-section">
-          {records.data.map((c) => (
-            <div className="connection-row" key={c.id}>
-              <span className="integration-mark" aria-label={names[c.provider]}>
-                {names[c.provider].slice(0, 1)}
-              </span>
-              <div>
-                <strong>
-                  {c.name} · {names[c.provider]}
-                </strong>
-                <p>
-                  Capture:{" "}
-                  {c.capture
-                    ? c.capture_paused
-                      ? "paused"
-                      : "explicit import"
-                    : "off"}{" "}
-                  · Retrieval: {c.retrieval ? "on" : "off"} · Writing:{" "}
-                  {c.writing ? "on" : "off"}
-                </p>
-                <small>
-                  Projects:{" "}
-                  {c.project_ids
-                    .map(
-                      (id) =>
-                        projects.data.find((p) => p.id === id)?.name || id,
-                    )
-                    .join(", ") || "none"}
-                  {c.global_access ? " · Global context allowed" : ""}
-                  <br />
-                  Created {date(c.created_at)} · Last activity{" "}
-                  {date(c.last_activity_at)} · Last import{" "}
-                  {date(c.last_sync_at)}
-                </small>
-                {c.last_error && (
-                  <p role="status">Action required: {c.last_error}</p>
-                )}
+        <>
+          <RelationshipExplorer
+            title="Agent access map"
+            caption="Configured credentials and explicit project grants from your workspace. A grant is not a live provider connection."
+            nodes={[
+              ...projects.data.map((p) => ({
+                id: p.id,
+                label: p.name,
+                kind: "Project",
+                detail: p.description || "Project scope",
+              })),
+              ...records.data.map((c) => ({
+                id: c.id,
+                label: c.name,
+                kind: "Credential",
+                detail: `${c.state}${new Date(c.expires_at) < new Date() ? " · expired" : ""} · Capture: ${c.capture ? (c.capture_paused ? "paused" : "on") : "off"} · Retrieval: ${c.retrieval ? "on" : "off"} · Writing: ${c.writing ? "on" : "off"} · Global: ${c.global_access ? "allowed" : "denied"}`,
+                action: () => open(c),
+                actionLabel: "Manage this connection",
+              })),
+            ]}
+            edges={records.data.flatMap((c) =>
+              (c.project_ids || []).map((id) => ({
+                from: c.id,
+                to: id,
+                label: `Project grant · credential ${c.state}`,
+              })),
+            )}
+          />
+          <section className="app-section">
+            {records.data.map((c) => (
+              <div className="connection-row" key={c.id}>
+                <span
+                  className="integration-mark"
+                  aria-label={names[c.provider]}
+                >
+                  {names[c.provider].slice(0, 1)}
+                </span>
+                <div>
+                  <strong>
+                    {c.name} · {names[c.provider]}
+                  </strong>
+                  <p>
+                    Capture:{" "}
+                    {c.capture
+                      ? c.capture_paused
+                        ? "paused"
+                        : "explicit import"
+                      : "off"}{" "}
+                    · Retrieval: {c.retrieval ? "on" : "off"} · Writing:{" "}
+                    {c.writing ? "on" : "off"}
+                  </p>
+                  <small>
+                    Projects:{" "}
+                    {c.project_ids
+                      .map(
+                        (id) =>
+                          projects.data.find((p) => p.id === id)?.name || id,
+                      )
+                      .join(", ") || "none"}
+                    {c.global_access ? " · Global context allowed" : ""}
+                    <br />
+                    Created {date(c.created_at)} · Last activity{" "}
+                    {date(c.last_activity_at)} · Last import{" "}
+                    {date(c.last_sync_at)}
+                  </small>
+                  {c.last_error && (
+                    <p role="status">Action required: {c.last_error}</p>
+                  )}
+                </div>
+                <span className="pill">
+                  {c.state === "revoked"
+                    ? "Revoked"
+                    : new Date(c.expires_at) < new Date()
+                      ? "Expired"
+                      : c.state === "verified"
+                        ? "Credential verified"
+                        : "Awaiting validation"}
+                </span>
+                <button className="button secondary" onClick={() => open(c)}>
+                  Manage
+                </button>
               </div>
-              <span className="pill">
-                {c.state === "revoked"
-                  ? "Revoked"
-                  : new Date(c.expires_at) < new Date()
-                    ? "Expired"
-                    : c.state === "verified"
-                      ? "Credential verified"
-                      : "Awaiting validation"}
-              </span>
-              <button className="button secondary" onClick={() => open(c)}>
-                Manage
-              </button>
-            </div>
-          ))}
-        </section>
+            ))}
+          </section>
+        </>
       ) : (
         <Empty title="Connect context deliberately.">
           Create a scoped credential, select projects and permissions, then

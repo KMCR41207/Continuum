@@ -16,6 +16,7 @@ export function Conversations() {
   const [importing, setImporting] = useState(false);
   const [raw, setRaw] = useState("");
   const [project, setProject] = useState("");
+  const [queued, setQueued] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -118,6 +119,21 @@ export function Conversations() {
               setBusy(true);
               setError("");
               try {
+                if (queued) {
+                  const input = JSON.parse(raw);
+                  const job = await db().rpc("enqueue_import", {
+                    p_workspace: workspace.id,
+                    p_project: project || null,
+                    p_input: input,
+                  });
+                  if (job.error) throw job.error;
+                  setNotice(
+                    "Import queued. A running worker will process it; inspect Processing jobs for status and retry.",
+                  );
+                  setImporting(false);
+                  setRaw("");
+                  return;
+                }
                 const result = await importConversation(
                   workspace.id,
                   project || null,
@@ -171,6 +187,14 @@ export function Conversations() {
               />
             </label>
             <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={queued}
+                onChange={(e) => setQueued(e.target.checked)}
+              />
+              Queue for background processing (requires a running worker)
+            </label>
+            <label className="checkbox">
               <input type="checkbox" required />I have permission to store and
               process this conversation.
             </label>
@@ -208,7 +232,18 @@ function ConversationDetail({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [linked, setLinked] = useState<
+    { memory_id: string; evidence: string }[]
+  >([]);
   useEffect(() => {
+    void db()
+      .from("memory_sources")
+      .select("memory_id,evidence")
+      .eq("conversation_id", c.id)
+      .then((r) => {
+        if (r.error) setError(r.error.message);
+        else setLinked(r.data);
+      });
     db()
       .from("messages")
       .select("id,role,content,source_metadata")
@@ -251,6 +286,17 @@ function ConversationDetail({
           ))
         )}
         <div className="modal-actions">
+          {linked.length > 0 && (
+            <section>
+              <h3>Source-linked memories</h3>
+              {linked.map((s) => (
+                <p key={s.memory_id}>{s.evidence}</p>
+              ))}
+              <Link to="/app/memories?status=all">
+                Review linked context in Memories
+              </Link>
+            </section>
+          )}
           <button
             className="button secondary"
             disabled={busy}

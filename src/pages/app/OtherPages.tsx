@@ -155,8 +155,8 @@ export function SettingsPage() {
                     <input value={session?.user.email || ""} readOnly />
                   </label>
                   <p className="small-text">
-                    Email changes are not supported in this build. Password
-                    recovery uses your verified email.
+                    Manage verified email and password changes in Security and
+                    data. Password recovery uses your verified email.
                   </p>
                   <Link to="/reset-password" className="text-link">
                     Reset password →
@@ -165,8 +165,7 @@ export function SettingsPage() {
               )}
               {tab === "Workspace" && (
                 <p className="small-text">
-                  This workspace is private. Team invitation and member
-                  administration are planned.
+                  Manage invitations, roles and ownership from the Team page.
                 </p>
               )}
               <button className="button" disabled={busy}>
@@ -248,12 +247,12 @@ export function SettingsPage() {
               <hr />
               <h3>Account deletion</h3>
               <p>
-                Account deletion requires a server-side administrative workflow
-                and is not yet implemented.
+                Account deletion requires password reauthentication and checks
+                shared-workspace ownership and subscription dependencies.
               </p>
-              <button className="button danger" disabled>
-                Account deletion unavailable
-              </button>
+              <Link className="button danger" to="/app/security">
+                Account security and deletion
+              </Link>
             </>
           )}
           {tab === "Developer" && (
@@ -270,14 +269,13 @@ export function SettingsPage() {
           )}
           {tab === "Billing" && (
             <>
-              <span className="pill">Development access</span>
               <p>
-                No payment method or subscription is connected. Checkout, paid
-                entitlements, and invoices require server-side Stripe
-                configuration.
+                View your workspace's actual plan, usage and verified
+                subscription state on the Billing page. Payments require
+                configured Stripe services.
               </p>
-              <ActionLink to="/pricing" secondary>
-                View proposed plans
+              <ActionLink to="/app/billing" secondary>
+                Manage billing
               </ActionLink>
             </>
           )}

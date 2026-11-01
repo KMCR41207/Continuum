@@ -14,8 +14,10 @@ import { db } from "../../lib/supabase";
 import { useRecords } from "../../lib/useRecords";
 import type { Activity } from "../../lib/types";
 import { errorMessage } from "../../lib/api";
+import { useRpc, type Usage } from "../../lib/product";
 export function Overview() {
   const { workspace } = useWorkspace();
+  const usage = useRpc<Usage>("workspace_usage", { p_workspace: workspace.id });
   const activity = useRecords<Activity>("audit_logs");
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState("");
@@ -58,6 +60,12 @@ export function Overview() {
         </Link>
       </div>
       {error && <Notice error>{error}</Notice>}
+      {usage.error && <Notice error>{usage.error}</Notice>}
+      <p>
+        <Link className="text-link" to="/app/onboarding">
+          Start or resume your onboarding guide
+        </Link>
+      </p>
       <div className="stats-row">
         {[
           ["memories", "Active memories", Layers],
@@ -148,9 +156,12 @@ export function Overview() {
             <ArrowUpRight size={16} />
           </Link>
           <div className="connection-summary">
-            <span className="status-dot muted" /> Agent connections are not
-            configured.
+            <span className="status-dot muted" />{" "}
+            {usage.data
+              ? `${usage.data.verified_agents} verified agent credentials · ${usage.data.connections} active connections · ${usage.data.plan} plan`
+              : "Loading connection and plan state…"}
             <Link to="/app/connections">See connection capabilities</Link>
+            <Link to="/app/usage">View actual usage and limits</Link>
           </div>
         </section>
       </div>
