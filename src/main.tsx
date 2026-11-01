@@ -16,7 +16,10 @@ for (const [name, content] of [
   ["og:title", brand.social.title],
   ["og:description", brand.social.description],
 ]) {
-  const meta = document.createElement("meta");
+  const meta =
+    document.querySelector<HTMLMetaElement>(
+      `meta[${name.startsWith("og:") ? "property" : "name"}="${name}"]`,
+    ) || document.createElement("meta");
   meta.setAttribute(name.startsWith("og:") ? "property" : "name", name);
   meta.content = content;
   document.head.append(meta);

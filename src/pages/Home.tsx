@@ -1,39 +1,39 @@
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Check,
-  Layers,
-  LockKeyhole,
-  GitBranch,
-  FileText,
-} from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, LockKeyhole } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ActionLink, Eyebrow, TextLink } from "../components/ui";
 import { MemoryLoop } from "../components/MemoryLoop";
+import { ContinuityStory } from "../components/ContinuityStory";
+import { MemoryCore } from "../components/immersive/MemoryCore";
+import { WorkflowShowcase } from "../components/immersive/WorkflowShowcase";
+import { selfHosted } from "../lib/localBackend";
 export function Home() {
   return (
-    <>
+    <div className="home-page">
+      <div className="content home-masthead">
+        <span>A PERSONAL MEMORY LAYER FOR AI</span>
+        <span>
+          YOUR THINKING, WITH A THROUGH LINE <ArrowUpRight size={13} />
+        </span>
+      </div>
       <section className="hero content">
         <div className="hero-copy">
           <Eyebrow>
-            <span className="tiny-cross">+</span> YOUR CONTEXT. CARRIED FORWARD.
+            <span className="tiny-cross">+</span> EVERY AI STARTS FRESH. YOU
+            SHOULDN’T HAVE TO.
           </Eyebrow>
           <h1>
-            Every AI
-            <br />
-            starts fresh.
-            <br />
-            <em>
-              You shouldn’t
-              <br className="desktop-break" /> have to.
-            </em>
+            <span className="title-line">Good thinking</span>{" "}
+            <span className="title-line">deserves</span>{" "}
+            <em className="title-line">a longer life.</em>
           </h1>
           <p className="hero-description">
             Keep your conversations, decisions, preferences, and project
             knowledge connected across the AI tools you use.
           </p>
           <div className="hero-actions">
-            <ActionLink to="/signup">Build your memory layer</ActionLink>
+            <ActionLink to={selfHosted ? "/app" : "/docs#setup"}>
+              {selfHosted ? "Open workspace" : "Connection setup"}
+            </ActionLink>
             <Link className="quiet-link" to="/#how-it-works">
               Explore how it works <ArrowRight size={15} />
             </Link>
@@ -45,16 +45,29 @@ export function Home() {
         </div>
         <div className="hero-visual">
           <div className="visual-annotation">
-            <span>CONTEXT HAS A LIFE BEYOND THE CHAT.</span>
-            <span>FIG. 01 ↙</span>
+            <span>THE LIVING ARCHIVE</span>
+            <span>FIG. 01 ↘</span>
           </div>
-          <MemoryLoop />
+          <div className="archive-path" aria-hidden="true">
+            <span>
+              01 <b>Source</b>
+            </span>
+            <i />
+            <span>
+              02 <b>Memory</b>
+            </span>
+            <i />
+            <span>
+              03 <b>Continuity</b>
+            </span>
+          </div>
+          <MemoryCore compact />
           <div className="visual-caption">
             <span className="caption-line" />
             <span>
-              One decision. A different agent.
+              Try the loop. One decision, a different agent.
               <br />
-              No explanation needed twice.
+              See what gets carried forward.
             </span>
           </div>
         </div>
@@ -79,6 +92,12 @@ export function Home() {
           See capabilities <ArrowUpRight size={14} />
         </Link>
       </section>
+      <div className="scroll-ticker" aria-hidden="true">
+        <div className="ticker-track">
+          A thought. <em>A thread.</em> A through line. <span>↗</span> A
+          thought. <em>A thread.</em> A through line. <span>↗</span>
+        </div>
+      </div>
       <section className="editorial-section content" id="how-it-works">
         <div className="section-heading">
           <Eyebrow>01 / THE CONTEXT PROBLEM</Eyebrow>
@@ -89,12 +108,14 @@ export function Home() {
           </span>
         </div>
         <div className="split-section">
-          <h2>
-            Your best thinking
-            <br />
-            shouldn’t live
-            <br />
-            in separate tabs.
+          <h2 className="scroll-ink">
+            {"Your best thinking shouldn’t live in separate tabs."
+              .split(" ")
+              .map((word, index) => (
+                <span key={index}>
+                  <span className="ink-word">{word}</span>{" "}
+                </span>
+              ))}
           </h2>
           <div>
             <p className="lead">
@@ -130,61 +151,24 @@ export function Home() {
           </div>
         </div>
       </section>
-      <section className="lifecycle-section">
-        <div className="content">
-          <div className="section-heading">
-            <Eyebrow>02 / FROM CONVERSATION TO CONTINUITY</Eyebrow>
-            <span>Less repetition. More forward motion.</span>
-          </div>
-          <div className="lifecycle-title">
-            <h2>
-              Not every word.
-              <br />
-              <em>What matters.</em>
-            </h2>
-            <p>
-              A useful memory is more than a saved transcript. It is a decision,
-              a preference, or a piece of context—with the evidence behind it.
-            </p>
-          </div>
-          <div className="lifecycle-grid">
-            {[
-              {
-                n: "01",
-                title: "Capture",
-                text: "Bring in a conversation you choose. Keep the original messages and their source.",
-                icon: FileText,
-              },
-              {
-                n: "02",
-                title: "Understand",
-                text: "Identify durable context. Surface uncertainty and possible conflicts for review.",
-                icon: Layers,
-              },
-              {
-                n: "03",
-                title: "Remember",
-                text: "Organize approved memories by project, with a history you can inspect.",
-                icon: GitBranch,
-              },
-              {
-                n: "04",
-                title: "Reuse",
-                text: "Make the relevant context available to authorized agents as connections are added.",
-                icon: ArrowUpRight,
-              },
-            ].map(({ n, title, text, icon: Icon }) => (
-              <article key={n}>
-                <div className="lifecycle-top">
-                  <span>{n}</span>
-                  <Icon size={21} />
-                </div>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
+      <ContinuityStory />
+      <div className="content">
+        <WorkflowShowcase />
+      </div>
+      <section className="content interactive-loop-section">
+        <div data-aos="fade-right">
+          <span className="eyebrow">TRY IT / SAMPLE WORKFLOW</span>
+          <h2>
+            Follow the evidence.
+            <br />
+            Make the next move.
+          </h2>
+          <p>
+            Step through a conversation becoming reusable context. This
+            interactive example uses sample data only.
+          </p>
         </div>
+        <MemoryLoop />
       </section>
       <section className="content editorial-section memory-section">
         <div>
@@ -212,6 +196,9 @@ export function Home() {
           <TextLink to="/product">Explore your memory workspace</TextLink>
         </div>
         <div className="memory-preview">
+          <div className="archive-tab">
+            A RECORD, NOT A BLACK BOX <span>↓</span>
+          </div>
           <div className="preview-header">
             <span>MEMORY DETAIL</span>
             <span className="demo-label">SAMPLE</span>
@@ -273,18 +260,25 @@ export function Home() {
           <TextLink to="/privacy">Read about your data</TextLink>
         </div>
       </section>
-      <section className="content closing-cta">
-        <Eyebrow>KEEP YOUR TRAIN OF THOUGHT.</Eyebrow>
-        <h2>
-          Change your tool.
-          <br />
-          <em>Keep your context.</em>
-        </h2>
-        <ActionLink to="/signup">Build your memory layer</ActionLink>
-        <span className="closing-mark" aria-hidden="true">
-          ↗
-        </span>
+      <section className="closing-band">
+        <div className="content closing-cta">
+          <Eyebrow>KEEP YOUR TRAIN OF THOUGHT.</Eyebrow>
+          <h2>
+            Change your tool.
+            <br />
+            <em>Keep your context.</em>
+          </h2>
+          <ActionLink to="/docs#setup">Read the setup guide</ActionLink>
+          <p className="closing-note">
+            Start with one conversation.
+            <br />
+            Keep the parts that make the next one better.
+          </p>
+          <span className="closing-mark" aria-hidden="true">
+            ↗
+          </span>
+        </div>
       </section>
-    </>
+    </div>
   );
 }

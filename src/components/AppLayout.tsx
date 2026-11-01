@@ -24,6 +24,7 @@ import {
 import { Brand, Notice, ActionLink } from "./ui";
 import { useAuth } from "../lib/AuthContext";
 import { configured, db } from "../lib/supabase";
+import { selfHosted } from "../lib/localBackend";
 import { errorMessage } from "../lib/api";
 import type { Workspace } from "../lib/types";
 const WorkspaceContext = createContext<{
@@ -123,6 +124,11 @@ export function AppLayout() {
     ["connections", "Connections", Plug],
     ["agents", "Agents", Bot],
     ["activity", "Activity", Activity],
+    ["usage", "Usage", Layers],
+    ["billing", "Billing", Layers],
+    ["team", "Team", Bot],
+    ["jobs", "Processing jobs", Activity],
+    ["security", "Security and data", Settings],
     ["settings", "Settings", Settings],
   ] as const;
   async function signOut() {
@@ -163,6 +169,11 @@ export function AppLayout() {
               </NavLink>
             ))}
           </nav>
+          {selfHosted && (
+            <NavLink to="/app/files" onClick={() => setOpen(false)}>
+              Project files
+            </NavLink>
+          )}
           <div className="sidebar-bottom">
             <NavLink to="/docs">
               <BookOpen size={16} />
@@ -190,7 +201,7 @@ export function AppLayout() {
                 <strong>
                   {session.user.user_metadata.full_name || "Your account"}
                 </strong>
-                <small>Development access</small>
+                <small>Continuum workspace</small>
               </div>
               <button
                 onClick={signOut}
@@ -216,6 +227,7 @@ export function AppLayout() {
   );
 }
 function Onboarding({ reload }: { reload: () => Promise<void> }) {
+  const navigate = useNavigate();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   return (
@@ -245,6 +257,7 @@ function Onboarding({ reload }: { reload: () => Promise<void> }) {
               });
               if (error) throw error;
               await reload();
+              navigate("/app/onboarding");
             } catch (e) {
               setError(errorMessage(e));
             } finally {

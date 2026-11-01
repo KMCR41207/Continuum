@@ -133,6 +133,7 @@ export function AuthPage({
             </Notice>
           )}
           {error && <Notice error>{error}</Notice>}
+          {mode==='password'&&!session&&<Notice error>This recovery session is missing or expired. <Link to="/reset-password">Request a new reset link</Link>.</Notice>}
           {notice && <Notice>{notice}</Notice>}
           <form onSubmit={submit}>
             {mode === "signup" && (
@@ -184,7 +185,7 @@ export function AuthPage({
                 Forgot password?
               </Link>
             )}
-            <button className="button full" disabled={busy || !configured}>
+            <button className="button full" disabled={busy || !configured || (mode==='password'&&!session)}>
               {busy
                 ? "Please wait…"
                 : {

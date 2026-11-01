@@ -11,6 +11,10 @@ import { Link } from "react-router-dom";
 import { ActionLink, Eyebrow, Modal, Notice, TextLink } from "../components/ui";
 import { integrations } from "../config/integrations";
 import { plans } from "../config/brand";
+import { WorkflowShowcase } from "../components/immersive/WorkflowShowcase";
+import { MemorySpiral } from "../components/immersive/MemorySpiral";
+import { IntegrationOrbit } from "../components/immersive/IntegrationOrbit";
+import { ArchitectureExplorer } from "../components/immersive/ArchitectureExplorer";
 export function Product() {
   return (
     <div className="content inner-page">
@@ -24,7 +28,9 @@ export function Product() {
         Conversations are where ideas begin. Your memory workspace is where the
         useful parts become something you can carry forward.
       </p>
-      <ActionLink to="/signup">Create your workspace</ActionLink>
+      <ActionLink to="/docs#setup">Read the setup guide</ActionLink>
+      <WorkflowShowcase />
+      <MemorySpiral />
       <div className="product-feature-list">
         {[
           [
@@ -62,7 +68,7 @@ export function Product() {
       </div>
       <div className="inline-cta">
         <h2>Your work, with its backstory.</h2>
-        <ActionLink to="/signup">Get started</ActionLink>
+        <ActionLink to="/docs#setup">Connection setup</ActionLink>
       </div>
     </div>
   );
@@ -90,6 +96,7 @@ export function Integrations() {
         Bring conversations in. Give authorized agents context out. Every
         connection tells you exactly which direction it supports.
       </p>
+      <IntegrationOrbit />
       <div className="capability-note">
         <div>
           <span>01 / CAPTURE</span>
@@ -163,6 +170,38 @@ export function Integrations() {
             <span className="pill">{selected.status}</span>
             <h3>{selected.capability}</h3>
             <p>{selected.setup}</p>
+            {selected.id !== "import" && (
+              <table>
+                <tbody>
+                  {[
+                    ["Native OAuth", "Unavailable"],
+                    ["Official provider API", "No capture adapter configured"],
+                    [
+                      "Explicit conversation import",
+                      "Normalized JSON; locally tested",
+                    ],
+                    ["Browser-extension capture", "Unavailable"],
+                    [
+                      "Local MCP retrieval",
+                      "Protocol tested; provider session unverified",
+                    ],
+                    [
+                      "Remote MCP retrieval",
+                      "HTTP protocol tested locally; HTTPS hosting required",
+                    ],
+                    [
+                      "Memory writing",
+                      "Scoped proposals with review; provider session unverified",
+                    ],
+                  ].map(([capability, state]) => (
+                    <tr key={capability}>
+                      <th scope="row">{capability}</th>
+                      <td>{state}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
             <TextLink
               to={selected.id === "import" ? "/app/conversations" : "/docs"}
             >
@@ -203,7 +242,7 @@ export function Pricing() {
             <p>{p.description}</p>
             <div className="plan-price">To be announced</div>
             <span className="small-text">
-              Proposed capacity: {p.memories.toLocaleString()} memories
+              Capacity and entitlements require operator configuration.
             </span>
             <ul className="check-list">
               {p.features.map((f) => (
@@ -213,9 +252,9 @@ export function Pricing() {
                 </li>
               ))}
             </ul>
-            <button className="button secondary" disabled>
-              Checkout not configured
-            </button>
+            <Link className="button secondary" to="/app/billing">
+              View billing setup
+            </Link>
           </article>
         ))}
       </div>
@@ -224,7 +263,7 @@ export function Pricing() {
         {[
           [
             "Can I create an account?",
-            "Yes, once the Supabase project is configured. Paid plan activation and purchases are intentionally unavailable in this build.",
+            "Yes, once Supabase is configured. Paid plans activate only after configured Stripe checkout and verified subscription events.",
           ],
           [
             "Does a plan connect every AI automatically?",
@@ -280,7 +319,9 @@ export function Developers() {
         Scoped RPC access, a local MCP server, and a coding-agent CLI share
         database-enforced permissions. Remote MCP hosting is not included.
       </p>
-      <div className="developer-layout">
+      <ArchitectureExplorer />
+      <WorkflowShowcase developer />
+      <div className="developer-layout" data-aos="fade-up">
         <div>
           <Code2 size={26} />
           <h2>
@@ -394,7 +435,7 @@ export function Docs() {
               in. Onboarding creates a private workspace and saves your review
               preferences. You can skip integrations and return to them later.
             </p>
-            <ActionLink to="/signup">Create an account</ActionLink>
+            <ActionLink to="/integrations">Review connection options</ActionLink>
           </section>
           <section id="import">
             <h2>Import a conversation</h2>
@@ -431,10 +472,12 @@ export function Docs() {
               verification requires a configured Supabase project.
             </p>
             <p>
-              Semantic embeddings, background processing, browser capture,
-              remote MCP hosting, team invitations, billing, and account
-              deletion are not yet implemented. Their interface states do not
-              imply they are operational.
+              Browser capture, automatic provider feeds and provider OAuth
+              remain unavailable. Semantic indexing requires an embedding
+              provider and opt-in; durable jobs require a running worker. Team
+              invitation links, billing and account deletion now have backend
+              implementations; live delivery, transactions and deployment
+              require external configuration.
             </p>
           </section>
         </div>
@@ -462,7 +505,7 @@ export function Policy({
         ],
         [
           "Control and deletion",
-          "You can export workspace data, delete memories, and delete imported conversations. Deleting a conversation also deletes memories derived from it, including their versions. Account deletion is not yet implemented and is clearly marked unavailable.",
+          "You can export workspace data and delete sources and derived memories. Server-side account deletion requires password reauthentication, transfer of shared-workspace ownership and cancellation of subscriptions. Legal and operator policies remain drafts for review.",
         ],
         [
           "Production policy required",

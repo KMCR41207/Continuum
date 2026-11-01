@@ -1549,6 +1549,7 @@ td small {
   grid-template-columns: 230px minmax(0, 1fr);
 }
 .app-sidebar {
+  overflow-y: auto;
   background: var(--color-sidebar);
   color: var(--color-sidebar-text);
   padding: 26px 18px 18px;
@@ -1574,6 +1575,7 @@ td small {
   margin: 40px 12px 15px;
 }
 .app-sidebar nav {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -2924,6 +2926,8 @@ td small {
 .modal-body pre {
   overflow-x: auto;
   padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .connection-row small {
   overflow-wrap: anywhere;
