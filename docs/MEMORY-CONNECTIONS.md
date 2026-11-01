@@ -1,5 +1,9 @@
 # Continuum memory connection completion report
 
+## Current product extension
+
+The subsequent product pass adds migrations 004–006, HTTP MCP with an actual local HTTP-client test, opted-in 384-dimensional pgvector indexing and hybrid search with full-text fallback, durable import/embedding jobs, destination-specific reviewed handoffs, workspace teams, configurable usage limits, billing/deletion architecture and expanded exports. See [the current product status](../PRODUCT-IMPLEMENTATION-STATUS.md) and [operations guide](OPERATIONS.md). No named provider or live embedding/payment service has been connected.
+
 ## Audit result
 
 The original build did **not** implement cross-agent memory connections. It had real member authentication/RLS, manual JSON ingestion, evidence-backed proposals, review, version history, deletion and export. Connections/Agents were placeholders; there were no scoped credentials, independent agent permissions, agent retrieval endpoint, MCP server or CLI. See `MEMORY-CONNECTION-AUDIT.md` for the initial evidence.
@@ -11,7 +15,7 @@ The original build did **not** implement cross-agent memory connections. It had 
 - Explicit authorized normalized JSON capture through a scoped connection, dashboard or CLI; member import remains available. Server validation, server-computed deduplication, original platform, source IDs/timestamps/attachment descriptions in metadata, atomic rollback, redacted failure events, manual retry, capture pause/resume and last-success timestamps.
 - Conservative server extraction into all requested category types, human review, linked message evidence, confidence, versioned corrections, archive/restore/delete. Review flags possible conflicting statements with the same recognized subject and scope; it never decides which is true automatically.
 - PostgreSQL full-text search and GIN indexes. Automatically regenerated 64-dimensional hashed lexical embeddings are stored, but relevance ranking currently uses full-text search. These are **not semantic model embeddings** or semantic conflict detection.
-- A local stdio MCP server using the official SDK, with all ten requested memory/project/conversation tools plus `test_connection` and explicit `capture_conversation`. Its startup validates credentials before opening the protocol transport.
+- Local stdio and stateless HTTP MCP servers using the official SDK, with the requested memory/project/conversation tools plus `test_connection`, `get_handoffs` and explicit `capture_conversation`. Credentials and current permissions are checked at use.
 - CLI login/connect/status/diagnostics (validate an owner-issued token), logout/disconnect (revoke), projects, search, import and scoped JSON export. No fake provider login or token file storage.
 - Source-linked project handoffs, connected-agent summaries, project instructions and scoped recent context. Handoffs never expand recipient permissions.
 - Connection dashboard: provider identity, method, created/expiry dates, credential-validation state, last activity/import, permission controls, test, rotate, revoke, explicit import/retry and event history. A verified credential is not labelled a verified provider session.
@@ -39,6 +43,9 @@ Apply migrations in order:
 1. `202610310001_website.sql`: existing workspace, project, source, memory, version and audit foundation.
 2. `202610310002_connections.sql`: `agent_connections`, private `connection_credentials`, `connection_events`; source metadata; full-text indexes and lexical embeddings; scoped import deduplication; connection configuration, ingestion and authorization.
 3. `202610310003_context_review.sql`: `project_handoffs`, conflict candidates, scoped handoff/context retrieval and expanded workspace export.
+4. `202610310004_product.sql`: onboarding, invitations/roles, plans/billing, jobs, usage and account-deletion service RPCs.
+5. `202610310005_semantic_handoffs.sql`: private semantic vectors, opted-in indexing, hybrid search and reviewed destination-specific handoffs.
+6. `202610310006_product_hardening.sql`: central quotas, reference-only stored handoffs, complete account/workspace exports and operational-history pruning.
 
 Supabase Data API routes (all POST):
 
@@ -57,7 +64,7 @@ Runtime entry points: `server/gateway.ts`, `server/mcp.ts`, `server/cli.ts`. Das
 
 This workspace has `.env.example`, but no configured `.env` or deployed Supabase endpoint. Nothing was deployed or connected to a personal provider account.
 
-1. Apply the three migrations to your Supabase project. Supply the website's public URL/key as documented in README. Never use a service-role key in the website or agent configuration.
+1. Apply all six migrations to your Supabase project. Supply the website's public URL/key as documented in README. Never use a service-role key in the website or agent configuration.
 2. Sign in, create a project, then open Connections. Only the workspace owner can issue or change connection credentials.
 3. For an import source, enable capture and grant the chosen project. For an agent, enable retrieval, grant that project, and allow the relevant source conversations (or all history within that project). Enable writing only if proposals/corrections are desired.
 4. Copy the one-time token. Store it using your client/OS secret-management mechanism. The app only retains it in dialog memory until close; the CLI only reads environment variables. Tokens do not belong in source control, command arguments, screenshots or request-body logs.
@@ -100,16 +107,16 @@ All eight required workflows pass locally:
 
 Additional tests cover credential table denial, tenant isolation, rate limits, required tool discovery, CLI search/diagnostics, conflict review, handoff scoping, source exclusion, export secret omission and deletion cascades. Browser control tests use explicit wire fixtures and do **not** count as live backend authentication verification.
 
-Final verification: `pnpm test` — 30 passed; `pnpm test:e2e` — 12 passed; `pnpm test:connections-ui` — 2 passed (desktop/mobile); `pnpm build` — passed. No remaining test failures. Earlier development failures (SQL alias ambiguity and an exact-label browser selector) were corrected and rerun successfully.
+Current verification: `pnpm test` — 44 passed; `pnpm test:e2e` — 12 passed; `pnpm test:connections-ui` — 6 passed (desktop/mobile); `pnpm build` — passed. The original cross-platform suite now applies all six migrations. Development failures were corrected and relevant suites rerun successfully.
 
 ## Remaining incomplete
 
 - **Live Supabase/Auth deployment and named-provider sessions:** no configured endpoint, account sessions or provider credentials were supplied. Local tests cannot verify hosted PostgREST routing, email login or actual platform compatibility.
 - **Automatic conversation capture and native provider exports:** no authorized official API/browser adapter was supplied or tested. Only explicit normalized JSON imports are implemented. Provider OAuth is not invented.
-- **Remote MCP/OAuth:** this implementation is a local stdio bridge to Supabase RPC. Cloud-only assistants requiring a hosted OAuth MCP endpoint cannot use it directly; that deployment and authorization-server work remains.
-- **Semantic search and general conflict resolution:** deterministic extraction, same-subject conflict candidates, lexical embeddings and full-text ranking are implemented. A configured semantic embedding model, vector ANN index and broader extraction/evaluation are not.
-- **Background synchronization:** no automatic feed exists, so there is no durable scheduler, provider backfill or background retry worker. Explicit import is atomic and manually retryable, with pause/resume and event history.
-- **Production operations:** add edge/IP abuse controls for unknown tokens, audit retention, deployment monitoring, secret-manager provisioning and live-provider acceptance tests before public rollout. Existing team invitation, account deletion and billing gaps are unrelated and were not expanded in this task.
+- **Remote MCP/OAuth:** the HTTP transport is implemented and tested with a local SDK HTTP client, but not deployed publicly. It accepts scoped bearer credentials; clients requiring OAuth discovery/authorization are not supported.
+- **Live semantic models and general conflict resolution:** provider abstraction, pgvector/HNSW storage, consent-based indexing and permission-filtered hybrid search are implemented and tested deterministically. Live model generation and retrieval-quality evaluation require credentials. Conflict detection remains conservative same-subject rules.
+- **Automatic synchronization:** persisted jobs and a worker now support explicit imports and semantic indexing with retry/backoff/pause/resume. No automatic provider feed or native provider history backfill exists.
+- **Production operations:** deploy TLS services and monitored workers, configure distributed edge limits, secret management, backups and live-provider acceptance tests. Teams, account deletion and billing now have implemented backends; SMTP, hosted Auth and Stripe acceptance still require external configuration.
 
 The core authorized import → reviewed source-linked memory → independently scoped MCP retrieval works locally. This report does not claim that every requested provider or production service is complete.
 

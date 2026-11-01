@@ -4,7 +4,7 @@
 
 ## This delivery
 
-The user's latest priority is the website. This repository is a modular React/Vite website with an authenticated Supabase-backed application, not the complete multi-service SaaS described in the master brief. Directory name is `continuum mani`; the public product name remains `[BRAND_NAME]` until approved.
+The original delivery was a modular React/Vite website with an authenticated Supabase-backed application. The official product name is Continuum. See the current product implementation status for subsequent SaaS services and verification.
 
 `src/pages` contains public and account views; `src/components` owns layout and reusable interactions; `src/lib` owns authentication, database operations, runtime validation, and conservative proposal extraction; `src/config` owns brand, plan, and integration capability metadata; `src/styles` owns design tokens and responsive styling. `supabase/migrations` is the database source of truth. Tests live separately in `tests/unit` and `tests/browser`.
 
