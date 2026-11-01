@@ -1,0 +1,6 @@
+[
+  {"memory": "The project stores durable relational records in PostgreSQL.", "query": "Which database keeps our application's structured information?", "category": "Technical architecture"},
+  {"memory": "I prefer concise explanations with runnable examples.", "query": "How should an assistant explain a solution to me?", "category": "Preferences"},
+  {"memory": "We decided to require keyboard navigation before every release.", "query": "What accessibility check is required before shipping?", "category": "Decisions"},
+  {"memory": "The deployment target is a private Linux server running Docker containers.", "query": "Where will the application be hosted?", "category": "Technical architecture"}
+]
