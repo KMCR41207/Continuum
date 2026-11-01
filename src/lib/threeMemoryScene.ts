@@ -1,6 +1,17 @@
 import * as THREE from "three";
 import type { CoreNode, SceneState } from "../components/immersive/demoData";
 
+/** Loads a GLB from a URL using Three.js GLTFLoader. */
+async function loadGlb(url: string): Promise<THREE.Group> {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore — three/addons is a valid package export path at runtime
+  const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+  return new Promise((resolve, reject) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    new (GLTFLoader as any)().load(url, (gltf: any) => resolve(gltf.scene), undefined, reject);
+  });
+}
+
 /** Demand-rendered scene: scroll, resize and pointer changes invalidate; idle/offscreen does not render. */
 export function createMemoryScene(
   host: HTMLElement,
@@ -23,17 +34,24 @@ export function createMemoryScene(
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 50);
   const world = new THREE.Group();
   scene.add(world);
-  scene.add(new THREE.AmbientLight(0xffffff, 2));
+  scene.add(new THREE.AmbientLight(0xffffff, 2.2));
   const light = new THREE.DirectionalLight(0xdbe5ff, 3);
   light.position.set(3, 5, 5);
   scene.add(light);
+  const fillLight = new THREE.PointLight(0x4070ff, 1.2, 12);
+  fillLight.position.set(-3, 2, -2);
+  scene.add(fillLight);
+
   const core = new THREE.Group();
   world.add(core);
   const geometries: THREE.BufferGeometry[] = [];
   const materials: THREE.Material[] = [];
   const textures: THREE.Texture[] = [];
+
+  // --- Procedural fallback core (stacked plates) — hidden once GLB loads ---
   const box = new THREE.BoxGeometry(1.18, 0.16, 1.18);
   geometries.push(box);
+  const coreFallback = new THREE.Group();
   for (let i = 0; i < 5; i++) {
     const material = new THREE.MeshStandardMaterial({
       color: i === 2 ? 0x3158c9 : 0xd2dfef,
@@ -43,26 +61,57 @@ export function createMemoryScene(
     materials.push(material);
     const plate = new THREE.Mesh(box, material);
     plate.position.y = (i - 2) * 0.24;
-    core.add(plate);
+    coreFallback.add(plate);
   }
+  core.add(coreFallback);
   core.rotation.set(0.22, 0.65, 0);
+
+  // --- Async: load core.glb ---
+  let coreGlb: THREE.Group | null = null;
+  loadGlb("/models/core.glb")
+    .then((glb) => {
+      // Normalise scale so it fits similarly to the stacked plates (~1.2 wide)
+      const box3 = new THREE.Box3().setFromObject(glb);
+      const size = new THREE.Vector3();
+      box3.getSize(size);
+      const scale = 1.1 / Math.max(size.x, size.y, size.z);
+      glb.scale.setScalar(scale);
+      glb.position.y = -0.1;
+      coreGlb = glb;
+      core.add(glb);
+      coreFallback.visible = false;
+      invalidate();
+    })
+    .catch(() => { /* keep fallback visible */ });
+
   const ring = new THREE.Group();
   world.add(ring);
+
+  // Shared procedural geometries for non-GLB nodes
   const sphere = new THREE.IcosahedronGeometry(0.18, 1);
   geometries.push(sphere);
   const projectShape = new THREE.OctahedronGeometry(0.22);
   geometries.push(projectShape);
   const card = new THREE.BoxGeometry(0.34, 0.25, 0.05);
   geometries.push(card);
+
   const pickables: THREE.Mesh[] = [];
   const entries: {
     node: CoreNode;
     mesh: THREE.Mesh;
+    glbRoot: THREE.Group | null;
     label: THREE.Sprite;
     angle: number;
     line: THREE.Line;
     dot: THREE.Mesh;
   }[] = [];
+
+  // Agent GLB paths — only chatgpt and claude get real models
+  const agentGlbPaths: Record<string, string> = {
+    chatgpt: "/models/chatgpt.glb",
+    claude: "/models/claude.glb",
+  };
+
   nodes.forEach((node, index) => {
     const angle = (index / nodes.length) * Math.PI * 2;
     const mat = new THREE.MeshStandardMaterial({
@@ -86,6 +135,8 @@ export function createMemoryScene(
     mesh.userData.id = node.id;
     ring.add(mesh);
     pickables.push(mesh);
+
+    // Sprite label
     const canvas = document.createElement("canvas");
     canvas.width = 384;
     canvas.height = 72;
@@ -96,14 +147,13 @@ export function createMemoryScene(
     ctx.fillText(node.label, 192, 44);
     const texture = new THREE.CanvasTexture(canvas);
     textures.push(texture);
-    const labelMat = new THREE.SpriteMaterial({
-      map: texture,
-      depthTest: false,
-    });
+    const labelMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
     materials.push(labelMat);
     const label = new THREE.Sprite(labelMat);
     label.scale.set(1.7, 0.4, 1);
     ring.add(label);
+
+    // Connection line
     const geometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(),
       new THREE.Vector3(),
@@ -117,61 +167,130 @@ export function createMemoryScene(
     materials.push(lineMat);
     const line = new THREE.Line(geometry, lineMat);
     ring.add(line);
+
+    // Animated dot
     const dotMat = new THREE.MeshBasicMaterial({ color: 0xafc5ef });
     materials.push(dotMat);
     const dot = new THREE.Mesh(sphere, dotMat);
     dot.scale.setScalar(0.23);
     ring.add(dot);
-    entries.push({ node, mesh, label, angle, line, dot });
+
+    let glbRoot: THREE.Group | null = null;
+
+    // Load GLB for agents that have one
+    if (node.kind === "agent" && agentGlbPaths[node.id]) {
+      const capturedIndex = index;
+      loadGlb(agentGlbPaths[node.id])
+        .then((glb) => {
+          const b = new THREE.Box3().setFromObject(glb);
+          const s = new THREE.Vector3();
+          b.getSize(s);
+          const sc = 0.36 / Math.max(s.x, s.y, s.z);
+          glb.scale.setScalar(sc);
+          (glb as THREE.Group & { _baseScale?: number })._baseScale = 1; // already normalised
+          entries[capturedIndex].glbRoot = glb;
+          ring.add(glb);
+          // hide procedural mesh — GLB takes over visual, but mesh stays for raycasting
+          entries[capturedIndex].mesh.visible = false;
+          invalidate();
+        })
+        .catch(() => { /* keep procedural mesh */ });
+    }
+
+    entries.push({ node, mesh, glbRoot, label, angle, line, dot });
   });
+
   let state = initial,
     progress = 0,
     visible = true,
     disposed = false,
     frame = 0,
     yaw = 0,
-    pitch = 0;
+    pitch = 0,
+    clock = 0,
+    lastTime = performance.now();
+
   const draw = () => {
     frame = 0;
     if (!visible || disposed) return;
+    const now = performance.now();
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+    clock += dt;
+
     world.rotation.set(pitch, yaw, 0);
     ring.rotation.y = (progress - 0.5) * 0.9;
     const zoomArc = Math.sin(Math.PI * progress) * 2.3;
     camera.position.set(0, 1.2, Math.max(3.1, 7.2 - state.zoom - zoomArc));
     camera.lookAt(0, 0, 0);
-    core.rotation.y = 0.65 + progress * 0.45;
-    entries.forEach(({ node, mesh, label, angle, line, dot }, index) => {
+
+    // Core model gentle idle rotation
+    if (coreGlb) {
+      coreGlb.rotation.y = clock * 0.4;
+    } else {
+      core.rotation.y = 0.65 + progress * 0.45;
+    }
+
+    entries.forEach(({ node, mesh, glbRoot, label, angle, line, dot }, index) => {
       const radius = 2.3 - Math.sin(progress * Math.PI) * 0.65;
-      mesh.position.set(
-        Math.cos(angle) * radius,
-        Math.sin(angle) * 1.1,
-        Math.sin(angle) * radius * 0.6,
-      );
-      mesh.scale.setScalar(node.id === state.selected ? 1.5 : 1);
+      const px = Math.cos(angle) * radius;
+      const py = Math.sin(angle) * 1.1;
+      const pz = Math.sin(angle) * radius * 0.6;
+
+      mesh.position.set(px, py, pz);
+      const scaleFactor = node.id === state.selected ? 1.5 : 1;
+      mesh.scale.setScalar(scaleFactor);
+
       const shown =
         node.kind !== "memory" ||
         node.detail.includes(state.project) ||
         node.detail.includes("Global");
-      mesh.visible = label.visible = line.visible = dot.visible = shown;
-      label.position.copy(mesh.position).add(new THREE.Vector3(0, 0.32, 0));
-      const attribute = line.geometry.getAttribute(
-        "position",
-      ) as THREE.BufferAttribute;
-      attribute.setXYZ(1, mesh.position.x, mesh.position.y, mesh.position.z);
+
+      mesh.visible = shown && !glbRoot;
+      label.visible = line.visible = dot.visible = shown;
+
+      // Position GLB at same spot, with gentle bob
+      if (glbRoot) {
+        glbRoot.position.set(px, py + Math.sin(clock * 1.2 + angle) * 0.05, pz);
+        glbRoot.rotation.y = clock * 0.6 + angle;
+        // Scale based on selection state — store normalised scale on load, apply multiplier
+        if (!(glbRoot as THREE.Group & { _baseScale?: number })._baseScale) {
+          const b = new THREE.Box3().setFromObject(glbRoot);
+          const s = new THREE.Vector3(); b.getSize(s);
+          (glbRoot as THREE.Group & { _baseScale?: number })._baseScale = 0.36 / Math.max(s.x, s.y, s.z);
+        }
+        const bs = (glbRoot as THREE.Group & { _baseScale?: number })._baseScale!;
+        glbRoot.scale.setScalar(bs * scaleFactor);
+        glbRoot.visible = shown;
+      }
+
+      label.position.set(px, py + 0.32, pz);
+
+      const attribute = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+      attribute.setXYZ(1, px, py, pz);
       attribute.needsUpdate = true;
       line.geometry.computeBoundingSphere();
+
       const fraction = state.mode === "retrieve" ? progress : 1 - progress;
       dot.position
         .copy(mesh.position)
         .multiplyScalar((fraction + index * 0.12) % 1);
       dot.visible = shown && state.mode !== "store";
     });
+
     renderer.render(scene, camera);
     host.dataset.sceneReady = "true";
+
+    // If GLB models loaded, keep ticking for smooth animations
+    if (coreGlb || entries.some((e) => e.glbRoot)) {
+      frame = requestAnimationFrame(draw);
+    }
   };
+
   const invalidate = () => {
     if (!frame && visible && !disposed) frame = requestAnimationFrame(draw);
   };
+
   const resize = new ResizeObserver(() => {
     const { width, height } = host.getBoundingClientRect();
     renderer.setSize(width, height, false);
@@ -180,6 +299,7 @@ export function createMemoryScene(
     invalidate();
   });
   resize.observe(host);
+
   const visibility = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
     host.dataset.rendering = visible ? "visible" : "paused";
@@ -190,8 +310,10 @@ export function createMemoryScene(
     }
   });
   visibility.observe(host);
+
   const ray = new THREE.Raycaster(),
     pointer = new THREE.Vector2();
+
   const hit = (e: PointerEvent) => {
     const rect = host.getBoundingClientRect();
     pointer.set(
@@ -199,10 +321,26 @@ export function createMemoryScene(
       (-(e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     ray.setFromCamera(pointer, camera);
-    return ray.intersectObjects(pickables.filter((mesh) => mesh.visible))[0]
-      ?.object.userData.id as string | undefined;
+    // Make all visible proxy meshes testable (GLB nodes have invisible mesh but same position)
+    const testMeshes = pickables.filter((m) => {
+      const entry = entries.find((e) => e.mesh === m);
+      if (!entry) return false;
+      const shown = entry.node.kind !== "memory" ||
+        entry.node.detail.includes(state.project) ||
+        entry.node.detail.includes("Global");
+      if (!shown) return false;
+      // Temporarily show GLB-node proxy meshes for raycasting
+      if (entry.glbRoot && !m.visible) { m.visible = true; m.userData._hiddenForRay = true; }
+      return true;
+    });
+    const result = ray.intersectObjects(testMeshes)[0]?.object.userData.id as string | undefined;
+    // Restore hidden proxies
+    testMeshes.forEach((m) => { if (m.userData._hiddenForRay) { m.visible = false; delete m.userData._hiddenForRay; } });
+    return result;
   };
+
   let drag: { x: number; y: number; distance: number } | null = null;
+
   const down = (e: PointerEvent) => {
     if (e.button !== 0) return;
     drag = { x: e.clientX, y: e.clientY, distance: 0 };
@@ -233,26 +371,19 @@ export function createMemoryScene(
     if (renderer.domElement.hasPointerCapture(e.pointerId))
       renderer.domElement.releasePointerCapture(e.pointerId);
   };
-  const cancel = () => {
-    drag = null;
-    hover("");
-  };
-  const lost = (e: Event) => {
-    e.preventDefault();
-    failed();
-  };
+  const cancel = () => { drag = null; hover(""); };
+  const lost = (e: Event) => { e.preventDefault(); failed(); };
+
   renderer.domElement.addEventListener("pointerdown", down);
   renderer.domElement.addEventListener("pointermove", move);
   renderer.domElement.addEventListener("pointerup", up);
   renderer.domElement.addEventListener("pointercancel", cancel);
   renderer.domElement.addEventListener("webglcontextlost", lost);
   invalidate();
+
   return {
     update(next: SceneState) {
-      if (next.reset !== state.reset) {
-        yaw = 0;
-        pitch = 0;
-      }
+      if (next.reset !== state.reset) { yaw = 0; pitch = 0; }
       state = next;
       invalidate();
     },
