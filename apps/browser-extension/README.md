@@ -1,0 +1,11 @@
+# Authorized browser capture
+
+Build from the repository root: `node apps/browser-extension/build.mjs`. Load `build/chrome` through Chrome's developer-mode Load unpacked action. For Firefox, load `build/firefox/manifest.json` as a temporary add-on via `about:debugging`. Distribution/signing and actual provider DOM compatibility require separate release checks.
+
+First create a capture-only connection in Continuum, select one project, and leave retrieval/writing off. In extension options set the local API endpoint, one-time token, and project ID. The token stays in extension-local storage and is not sent to content scripts. Enable explicit consent, choose ChatGPT and/or Claude, then turn pause off. Automatic synchronization is off unless separately selected. A visible page button reports status and offers manual sync. Import results and errors are shown in options history. Revocation/expiry is checked by the API on every upload.
+
+Default granted hosts are only `chatgpt.com` and `claude.ai`. Backend access is requested for the exact URL origin on Save. For a private HTTPS backend set `CONTINUUM_EXTENSION_API_ORIGIN` to its exact origin before building; wildcard website access is never requested. No cookies, provider tokens, browser storage, hidden state, internal APIs, or unrelated websites are inspected. DOM adapters use visible message elements and may stop matching when providers change their UI. Missing content reports an error instead of inventing messages. Live provider accounts were not used in verification.
+
+Offline snapshots are persisted in a bounded extension-local retry queue (20 captures), with exponential retry. Entries are bound to the endpoint/project authorized at capture time. Pausing prevents retry and capture. Clear local queued captures to remove pending private content; delete already imported data in Continuum Conversations. Uninstalling does not delete backend records. Do not share a browser profile containing the extension credential.
+
+Chrome uses an MV3 module service worker. Firefox uses background scripts in a separate generated manifest. Automated pure-module/DOM fixture tests cover normalization/consent/deduplication; real browser packaging, Firefox signing, provider selectors, and store policy review remain release acceptance tasks.
