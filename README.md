@@ -1,8 +1,14 @@
-# Universal AI memory — website phase
+# Continuum
+
+## Run the self-hosted platform
+
+The new FastAPI/SQLite/Chroma mode runs locally without Supabase. After installing Python 3.12 and uv, run `uv sync --locked --extra test --extra local-model` from `services/memory-api`, then `uv run --no-sync python -m app.admin prepare-model`. Return to the repository root and run `pnpm selfhosted`. Choose **Open workspace**, create your local administrator, and use the existing Projects, Conversations, Memories and Connections pages. Run `uv run --no-sync python -m app.worker` from the service directory for background processing.
+
+See the [self-hosted quick start, API, MCP, deployment and privacy guide](services/memory-api/README.md), [integration/migration decisions](docs/SELF-HOSTED-INTEGRATION.md), and [browser-extension instructions](apps/browser-extension/README.md). The Supabase setup below remains a separate supported deployment mode. There are no dual writes between these modes.
 
 Project folder: `C:\Users\ksair\continuum mani`.
 
-This repository includes the website, Supabase-backed account application, scoped memory RPC, local MCP server and CLI. The cross-platform memory workflow is tested with PostgreSQL and an actual MCP SDK client. Live provider sessions and hosted Supabase deployment are not verified. See [memory connection report and setup](docs/MEMORY-CONNECTIONS.md).
+Continuum is a user-controlled memory layer for AI assistants and coding agents. This repository includes the React application, Supabase schema/RPCs, local and HTTP MCP transports, CLI, durable worker, optional semantic retrieval, team management and billing/account API. See the [product audit](PRODUCT-IMPLEMENTATION-AUDIT.md), [current implementation status](PRODUCT-IMPLEMENTATION-STATUS.md) and [operations guide](docs/OPERATIONS.md). Live Supabase/provider accounts, payments and embedding models have not been connected.
 
 ## Run locally
 
@@ -16,12 +22,14 @@ Open the address printed by Vite (normally http://localhost:5173). The public si
 
 ## Enable real accounts and data
 
-1. Create a Supabase project and apply every SQL file in `supabase/migrations` in filename order. Existing installations with migration 001 need migrations 002 and 003.
+1. Create a Supabase project and apply migrations **001–006** in filename order. Existing installations through 003 need 004–006. Migration 005 requires pgvector in the `extensions` schema. Back up first; see the operations guide for migration/recovery instructions.
 2. Copy `.env.example` to `.env`. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to the project's URL and publishable/anon key. Never use the service-role key in `VITE_*` variables.
 3. Set your local or production URL in Supabase Auth. Allow `/app` and `/auth/password` redirects for your site. Keep email confirmation enabled; configure production email delivery before launch.
 4. Optionally configure the Google provider and set `VITE_GOOGLE_AUTH_ENABLED=true`.
 5. Restart Vite, register, confirm your email, sign in, and create a workspace.
-6. Create a project, import normalized conversation JSON, and review proposed memories. See `/docs` for the format.
+6. Complete or skip/resume onboarding, create a project, import authorized normalized JSON, and review memories. Connections never enable capture or broad access automatically.
+7. For application services, create a private `.env.server` using the server-only names in `.env.example`; run `pnpm api` and `pnpm worker`. Set public `VITE_API_URL` to the API origin. Configure Stripe and embeddings only when their credentials and approved terms are available.
+8. For HTTP MCP, run `node server/http.ts` with a separate environment containing the public Supabase URL/key and host/origin settings, then expose it behind HTTPS. Clients supply an owner-issued token as `Authorization: Bearer ...`. The bridge does not implement an OAuth authorization server.
 
 ## Implemented website
 
@@ -29,7 +37,7 @@ Public: homepage, interactive Memory Loop, product, integration directory with s
 
 Account: sign-up/sign-in/reset flows wired to Supabase; protected workspace shell; workspace creation; overview database counts; memory search/category/project/status filters and pagination; review/edit/approve/archive/restore/delete; source evidence and previous versions; conversation JSON import/archive/detail/delete/exclusion; project create/edit/archive/delete; real audit events; profile/workspace settings; JSON export.
 
-Connections and Agents manage owner-issued scoped credentials, independent permissions, project/history allowlists, validation, rotation, revocation and import activity. Projects support source-linked handoffs. Billing does not issue charges. Public policy pages are development disclosures, not final legal documents. Fonts use the designated Relona token with a disclosed Georgia fallback until licensed assets are supplied in `public/fonts`.
+Connections and Agents manage owner-issued scoped credentials, independent permissions, project/history allowlists, validation, rotation, revocation and import activity. Projects support reviewed destination-specific handoffs. Usage, Billing, Team, Processing jobs, Security and data, and resumable onboarding are implemented. Stripe can create real checkout/portal sessions **only when configured**; no transaction has been run here. Public policies remain drafts. Licensed Relona font assets are still required; Georgia remains the explicit fallback.
 
 ## Verification
 
@@ -41,7 +49,9 @@ pnpm test:e2e
 pnpm test:connections-ui
 ```
 
-Browser tests expect no Supabase environment variables so they can verify configuration-required behavior. Database unit tests use isolated PostgreSQL through PGlite with a test-only `auth.uid()` shim. This verifies SQL semantics and permissions, not live Supabase Auth or delivery. Live signup, mail verification, and full authenticated browser acceptance remain unverified until credentials are supplied.
+Public browser tests expect no Supabase environment variables. Product browser tests start their own explicitly configured fixture server. Database tests execute the migrations in PGlite/pgvector with a test-only identity shim; real SDK clients exercise stdio and HTTP MCP. Current results: **44 database/unit/protocol tests, 40 browser tests, and production build pass**. Hosted signup, email delivery, Stripe transactions and live model/provider sessions remain unverified.
+
+The [immersive architecture guide](docs/IMMERSIVE-ARCHITECTURE.md) documents AOS, GSAP/ScrollTrigger, Three.js, all ten adapted scroll techniques, real-record relationship explorers, mobile alternatives, and remaining limits. The [original design guide](docs/DESIGN-IMPLEMENTATION.md) records the living-archive art direction and local textures. The public suite includes 32 checks for routes, demo interactions, 3D controls, motion reversal, anchors, download failure, and responsive behavior; the authenticated UI suite includes 8 checks. Screenshots are saved locally in `artifacts/design/`.
 
 ## Deploy the website
 
@@ -49,4 +59,4 @@ Run `pnpm build` and publish `dist` with an HTTPS static hosting service. Set pu
 
 ## Remaining scope
 
-Remote MCP hosting/OAuth, semantic model embeddings, general conflict reasoning, automatic browser/provider capture, native provider export adapters, durable background sync, team management, retention jobs, account deletion, usage-based quotas, and Stripe billing remain outside the implemented path. No named provider integration is presented as live-tested. See `docs/MEMORY-CONNECTIONS.md` for evidence, limits and exact setup.
+Public deployment, OAuth-only MCP client support, automatic provider feeds/browser capture, native export adapters, actual embedding/model evaluation, SMTP invitation delivery, approved commercial/legal configuration and external acceptance testing remain. The relevant underlying HTTP, semantic, queue, billing, team, quota and deletion architecture is implemented locally. No named provider integration is presented as live-tested. See the final status matrix for exact limitations.

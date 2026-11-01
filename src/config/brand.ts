@@ -1,17 +1,17 @@
 export const brand = {
-  name: "[BRAND_NAME]",
-  wordmark: "[BRAND_NAME]",
-  monogram: "M",
+  name: "Continuum",
+  wordmark: "Continuum",
+  monogram: "C",
   tagline: "One memory. Every intelligence.",
   primaryColor: "#3158C9",
   favicon: "/favicon.svg",
   metadata: {
-    title: "[BRAND_NAME] — One memory. Every intelligence.",
+    title: "Continuum — One memory. Every intelligence.",
     description:
       "Keep conversations, decisions, preferences, and project knowledge connected across your AI tools.",
   },
   social: {
-    title: "Your intelligence, carried forward.",
+    title: "Continuum — Your intelligence, carried forward.",
     description: "A user-controlled memory layer for your AI tools.",
   },
   typography: { display: "Relona", licensedAssetAvailable: false },
@@ -22,7 +22,6 @@ export const plans = [
     name: "Free",
     description: "Start connecting the dots.",
     price: null,
-    memories: 500,
     features: [
       "Personal workspace",
       "Manual conversation import",
@@ -35,7 +34,6 @@ export const plans = [
     name: "Pro",
     description: "For your everyday thinking.",
     price: null,
-    memories: 10000,
     features: [
       "Everything in Free",
       "Higher memory capacity",
@@ -48,7 +46,6 @@ export const plans = [
     name: "Max",
     description: "Room for your most ambitious work.",
     price: null,
-    memories: 50000,
     features: [
       "Everything in Pro",
       "Expanded processing limits",
@@ -61,7 +58,6 @@ export const plans = [
     name: "Teams",
     description: "A shared foundation for your team.",
     price: null,
-    memories: 100000,
     features: [
       "Shared workspaces",
       "Team administration",

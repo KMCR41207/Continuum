@@ -6,3 +6,10 @@ dist/
 !.env.agent.example
 test-results/
 playwright-report/
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+*.pyc
+apps/browser-extension/build/
+package-lock.json
