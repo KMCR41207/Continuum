@@ -4,7 +4,7 @@ test("memory loop demonstrates capture, source evidence, and retrieval", async (
 }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Every AI",
+    "Good thinking",
   );
   await page
     .getByRole("button", { name: "Capture conversation", exact: true })
@@ -14,9 +14,11 @@ test("memory loop demonstrates capture, source evidence, and retrieval", async (
     .getByRole("button", { name: "Inspect extracted memory", exact: true })
     .click();
   await expect(
-    page.getByText("PostgreSQL is the selected database for Project Atlas.", {
-      exact: true,
-    }),
+    page
+      .locator(".memory-loop")
+      .getByText("PostgreSQL is the selected database for Project Atlas.", {
+        exact: true,
+      }),
   ).toBeVisible();
   await page.getByRole("button", { name: "View source", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -40,7 +42,9 @@ test("integration search and details accurately show capabilities", async ({
   await page
     .getByRole("textbox", { name: "Search integrations" })
     .fill("Codex");
-  await page.getByRole("button", { name: /Client setup required Codex/ }).click();
+  await page
+    .getByRole("button", { name: /Client setup required Codex/ })
+    .click();
   await expect(page.getByRole("dialog")).toContainText(
     "No live provider connection is claimed",
   );
@@ -70,11 +74,26 @@ test("unconfigured authentication never pretends to sign in", async ({
     page.getByText("VITE_SUPABASE_URL", { exact: true }),
   ).toBeVisible();
 });
+test("public calls to action lead to setup instead of unavailable authentication", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("link", { name: "Connection setup", exact: true }),
+  ).toHaveAttribute("href", "/docs#setup");
+  await expect(
+    page.getByRole("link", { name: "Setup guide", exact: true }),
+  ).toHaveAttribute("href", "/docs#setup");
+  await expect(page.locator('a[href="/signin"], a[href="/signup"]')).toHaveCount(
+    0,
+  );
+});
 test("pricing cannot simulate checkout", async ({ page }) => {
   await page.goto("/pricing");
-  const buttons = page.getByRole("button", { name: "Checkout not configured" });
-  await expect(buttons).toHaveCount(4);
-  for (const b of await buttons.all()) await expect(b).toBeDisabled();
+  const links = page.getByRole("link", { name: "View billing setup" });
+  await expect(links).toHaveCount(4);
+  for (const link of await links.all())
+    await expect(link).toHaveAttribute("href", "/app/billing");
 });
 test("public pages render without overflow or broken internal links", async ({
   page,

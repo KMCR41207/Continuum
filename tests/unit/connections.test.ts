@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
+import {vector} from '@electric-sql/pglite-pgvector';
 import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { Client } from "@modelcontextprotocol/client";
@@ -93,15 +94,18 @@ async function tool(name: string, args: Record<string, unknown> = {}) {
   return r.isError ? { error: text } : JSON.parse(text).data;
 }
 beforeAll(async () => {
-  pg = await PGlite.create();
+  pg = await PGlite.create({extensions:{vector}});
   await pg.exec(
-    "create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;",
+    "create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;",
   );
-  await pg.query("insert into auth.users values($1),($2)", [owner, outsider]);
+  await pg.query("insert into auth.users(id) values($1),($2)", [owner, outsider]);
   for (const migration of [
     "202610310001_website.sql",
     "202610310002_connections.sql",
     "202610310003_context_review.sql",
+    "202610310004_product.sql",
+    "202610310005_semantic_handoffs.sql",
+    "202610310006_product_hardening.sql",
   ])
     await pg.exec(
       await readFile(
@@ -472,8 +476,8 @@ describe("real MCP stdio client → HTTP RPC → PostgreSQL connection lifecycle
     const scoped = await configure(null, "claude", perms({ writing: true }));
     await user();
     await pg.query(
-      "select public.create_handoff($1,$2,'claude','Implement the reviewed architecture')",
-      [projectA, conversation],
+      "select public.confirm_handoff($1,$2,$3,'Implement the reviewed architecture',public.prepare_handoff($1,$2,$3,'Implement the reviewed architecture'))",
+      [projectA, conversation,scoped.id],
     );
     await expect(
       pg.query("select public.create_handoff($1,$2,'claude','Wrong project')", [
