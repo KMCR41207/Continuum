@@ -1,0 +1,48 @@
+services:
+  api:
+    build: ./services/memory-api
+    environment:
+      CONTINUUM_DATA_DIR: /data
+      CONTINUUM_ALLOWED_ORIGINS: http://127.0.0.1:8080,http://localhost:8080
+      CONTINUUM_ALLOWED_HOSTS: localhost,127.0.0.1,api
+      CONTINUUM_CHROMA_URL: http://chroma:8000
+    volumes:
+      - continuum-data:/data
+      - continuum-models:/home/continuum/.cache
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on: [chroma]
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  worker:
+    build: ./services/memory-api
+    command: [".venv/bin/python", "-m", "app.worker"]
+    environment:
+      CONTINUUM_DATA_DIR: /data
+      CONTINUUM_CHROMA_URL: http://chroma:8000
+    volumes:
+      - continuum-data:/data
+      - continuum-models:/home/continuum/.cache
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+  chroma:
+    image: chromadb/chroma:1.5.9
+    environment:
+      ANONYMIZED_TELEMETRY: "False"
+    volumes: ["continuum-chroma:/data"]
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on: [api]
+    restart: unless-stopped
+volumes:
+  continuum-data:
+  continuum-chroma:
+  continuum-models:
