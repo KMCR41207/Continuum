@@ -72,6 +72,8 @@ Audit feature ledger: **41 features reviewed: 20 COMPLETE, 10 PARTIALLY COMPLETE
 
 Common UI quality: relevant pages use loading/error/empty states and RPC errors are surfaced through `errorMessage`. There is no end-to-end browser test against an actual Supabase project. The immersive marketing layer is intentionally outside the functional audit: it is implemented in AOS/GSAP/Three.js and tested in Chromium, but it neither connects providers nor persists product data.
 
+**3D Model Integration (Added 2 November 2026):** Memory Core and Integration Orbit scenes now load GLB models asynchronously using Three.js GLTFLoader. Core model (`/models/core.glb`) displays as the central hub with continuous idle rotation. Agent models (`/models/chatgpt.glb`, `/models/claude.glb`) display as orbiting nodes with smooth animations. Procedural geometry fallbacks (stacked plates, icosahedron spheres) ensure immediate rendering while models load. All scenes use demand-rendering (pause when offscreen) and respect reduced-motion preferences with CSS-only fallbacks. See `docs/3d-models.md` for complete integration details.
+
 ## 5. Backend Implementation Status
 
 | Capability | Status | Evidence |
