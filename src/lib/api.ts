@@ -70,12 +70,20 @@ export async function exportWorkspace(workspace: string) {
     p_workspace: workspace,
   });
   if (error) throw error;
+  downloadJson(data,'memory-export');
+}
+export async function exportAccount() {
+  const {data,error}=await db().rpc('export_account');
+  if(error)throw error;
+  downloadJson(data,'continuum-account-export');
+}
+function downloadJson(data: unknown, prefix: string) {
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
   );
   const link = document.createElement("a");
   link.href = url;
-  link.download = `memory-export-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `${prefix}-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

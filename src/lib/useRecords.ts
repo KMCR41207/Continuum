@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { list, errorMessage } from "./api";
 import { useWorkspace } from "../components/AppLayout";
 export function useRecords<T>(table: string) {
@@ -6,19 +6,26 @@ export function useRecords<T>(table: string) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const sequence = useRef(0);
   const reload = useCallback(async () => {
+    const request = ++sequence.current;
     setLoading(true);
     setError("");
     try {
-      setData(await list<T>(table, workspace.id));
+      const result = await list<T>(table, workspace.id);
+      if (request === sequence.current) setData(result);
     } catch (e) {
-      setError(errorMessage(e));
+      if (request === sequence.current) setError(errorMessage(e));
     } finally {
-      setLoading(false);
+      if (request === sequence.current) setLoading(false);
     }
   }, [table, workspace.id]);
   useEffect(() => {
+    setData([]);
     void reload();
+    return () => {
+      sequence.current++;
+    };
   }, [reload]);
   return { data, loading, error, reload };
 }

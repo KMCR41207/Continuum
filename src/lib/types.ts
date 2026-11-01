@@ -7,6 +7,7 @@ export type Workspace = {
     sensitive_review?: boolean;
     onboarding_step?: number;
     connection?: string;
+    semantic_enabled?: boolean;
   };
   created_at: string;
 };
