@@ -16,8 +16,8 @@ function createOrbitScene(host: HTMLElement, onSelect: (id: string) => void) {
 
     if (disposed) return null;
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
     renderer.setClearColor(0x000000, 0);
     host.appendChild(renderer.domElement);
     renderer.domElement.setAttribute("aria-hidden", "true");
@@ -57,7 +57,7 @@ function createOrbitScene(host: HTMLElement, onSelect: (id: string) => void) {
     let coreGlb: THREE_TYPES.Group | null = null;
 
     // Fallback procedural core while GLB loads
-    const fallbackGeo = new THREE.IcosahedronGeometry(0.7, 2);
+    const fallbackGeo = new THREE.IcosahedronGeometry(0.7, 3);
     const fallbackMat = new THREE.MeshStandardMaterial({ color: 0x3158c9, roughness: 0.3, metalness: 0.6 });
     const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
     coreGroup.add(fallbackMesh);
@@ -112,14 +112,14 @@ function createOrbitScene(host: HTMLElement, onSelect: (id: string) => void) {
     const agentGroup = new THREE.Group();
     scene.add(agentGroup);
     const agents: AgentEntry[] = [];
-    const proxyGeo = new THREE.SphereGeometry(0.38, 8, 8);
+    const proxyGeo = new THREE.SphereGeometry(0.38, 16, 16);
 
     agentDefs.forEach((def, i) => {
       const angle = (i / agentDefs.length) * Math.PI * 2;
 
       // Procedural fallback sphere
       const fallbackMat2 = new THREE.MeshStandardMaterial({ color: 0xaec4e8, roughness: 0.6 });
-      const fallback = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1), fallbackMat2);
+      const fallback = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 2), fallbackMat2);
       agentGroup.add(fallback);
 
       // Pick proxy (invisible, always at node position for raycasting)
@@ -138,7 +138,7 @@ function createOrbitScene(host: HTMLElement, onSelect: (id: string) => void) {
 
       // Animated dot
       const dotMat = new THREE.MeshBasicMaterial({ color: 0x94adff });
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), dotMat);
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), dotMat);
       agentGroup.add(dot);
 
       const entry: AgentEntry = { id: def.id, name: def.name, angle, glb: null, fallback, label, line, dot, pickProxy: proxy };

@@ -24,9 +24,9 @@ export function createMemoryScene(
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
     antialias: true,
-    powerPreference: "low-power",
+    powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
   renderer.setClearColor(0x10141d, 0);
   host.appendChild(renderer.domElement);
   renderer.domElement.setAttribute("aria-hidden", "true");
@@ -49,7 +49,7 @@ export function createMemoryScene(
   const textures: THREE.Texture[] = [];
 
   // --- Procedural fallback core (stacked plates) — hidden once GLB loads ---
-  const box = new THREE.BoxGeometry(1.18, 0.16, 1.18);
+  const box = new THREE.BoxGeometry(1.18, 0.16, 1.18, 2, 1, 2);
   geometries.push(box);
   const coreFallback = new THREE.Group();
   for (let i = 0; i < 5; i++) {
@@ -88,11 +88,11 @@ export function createMemoryScene(
   world.add(ring);
 
   // Shared procedural geometries for non-GLB nodes
-  const sphere = new THREE.IcosahedronGeometry(0.18, 1);
+  const sphere = new THREE.IcosahedronGeometry(0.18, 3);
   geometries.push(sphere);
-  const projectShape = new THREE.OctahedronGeometry(0.22);
+  const projectShape = new THREE.OctahedronGeometry(0.22, 2);
   geometries.push(projectShape);
-  const card = new THREE.BoxGeometry(0.34, 0.25, 0.05);
+  const card = new THREE.BoxGeometry(0.34, 0.25, 0.05, 2, 2, 1);
   geometries.push(card);
 
   const pickables: THREE.Mesh[] = [];
