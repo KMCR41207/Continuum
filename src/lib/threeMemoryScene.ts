@@ -1,9 +1,11 @@
-import * as THREE from "three";
+import type * as THREE_TYPES from "three";
 import type { CoreNode, SceneState } from "../components/immersive/demoData";
 
 /** Loads a GLB from a URL using Three.js GLTFLoader. */
-async function loadGlb(url: string): Promise<THREE.Group> {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+async function loadGlb(
+  THREE: typeof THREE_TYPES,
+  url: string,
+): Promise<THREE_TYPES.Group> {
   // @ts-ignore — three/addons is a valid package export path at runtime
   const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
   return new Promise((resolve, reject) => {
@@ -14,6 +16,43 @@ async function loadGlb(url: string): Promise<THREE.Group> {
 
 /** Demand-rendered scene: scroll, resize and pointer changes invalidate; idle/offscreen does not render. */
 export function createMemoryScene(
+  host: HTMLElement,
+  nodes: CoreNode[],
+  initial: SceneState,
+  select: (id: string) => void,
+  hover: (label: string) => void,
+  failed: () => void,
+) {
+  // All Three.js work is deferred into an async IIFE so the module itself
+  // does NOT statically import three — keeping it out of the main bundle.
+  let disposed = false;
+  const api = {
+    update(_next: SceneState) { pendingState = _next; resolved?.update(_next); },
+    progress(_value: number) { pendingProgress = _value; resolved?.progress(_value); },
+    dispose() {
+      disposed = true;
+      resolved?.dispose();
+    },
+  };
+
+  let resolved: ReturnType<typeof buildScene> | null = null;
+  let pendingState = initial;
+  let pendingProgress = 0;
+
+  (async () => {
+    const THREE = await import("three");
+    if (disposed) return;
+    resolved = buildScene(THREE, host, nodes, pendingState, select, hover, failed);
+    resolved.progress(pendingProgress);
+  })().catch(() => failed());
+
+  return api;
+}
+
+type THREEModule = typeof THREE_TYPES;
+
+function buildScene(
+  THREE: THREEModule,
   host: HTMLElement,
   nodes: CoreNode[],
   initial: SceneState,
@@ -44,9 +83,9 @@ export function createMemoryScene(
 
   const core = new THREE.Group();
   world.add(core);
-  const geometries: THREE.BufferGeometry[] = [];
-  const materials: THREE.Material[] = [];
-  const textures: THREE.Texture[] = [];
+  const geometries: THREE_TYPES.BufferGeometry[] = [];
+  const materials: THREE_TYPES.Material[] = [];
+  const textures: THREE_TYPES.Texture[] = [];
 
   // --- Procedural fallback core (stacked plates) — hidden once GLB loads ---
   const box = new THREE.BoxGeometry(1.18, 0.16, 1.18, 2, 1, 2);
@@ -67,10 +106,9 @@ export function createMemoryScene(
   core.rotation.set(0.22, 0.65, 0);
 
   // --- Async: load core.glb ---
-  let coreGlb: THREE.Group | null = null;
-  loadGlb("/models/core.glb")
+  let coreGlb: THREE_TYPES.Group | null = null;
+  loadGlb(THREE, "/models/core.glb")
     .then((glb) => {
-      // Normalise scale so it fits similarly to the stacked plates (~1.2 wide)
       const box3 = new THREE.Box3().setFromObject(glb);
       const size = new THREE.Vector3();
       box3.getSize(size);
@@ -95,15 +133,15 @@ export function createMemoryScene(
   const card = new THREE.BoxGeometry(0.34, 0.25, 0.05, 2, 2, 1);
   geometries.push(card);
 
-  const pickables: THREE.Mesh[] = [];
+  const pickables: THREE_TYPES.Mesh[] = [];
   const entries: {
     node: CoreNode;
-    mesh: THREE.Mesh;
-    glbRoot: THREE.Group | null;
-    label: THREE.Sprite;
+    mesh: THREE_TYPES.Mesh;
+    glbRoot: THREE_TYPES.Group | null;
+    label: THREE_TYPES.Sprite;
     angle: number;
-    line: THREE.Line;
-    dot: THREE.Mesh;
+    line: THREE_TYPES.Line;
+    dot: THREE_TYPES.Mesh;
   }[] = [];
 
   // Agent GLB paths — only chatgpt and claude get real models
@@ -175,22 +213,21 @@ export function createMemoryScene(
     dot.scale.setScalar(0.23);
     ring.add(dot);
 
-    let glbRoot: THREE.Group | null = null;
+    let glbRoot: THREE_TYPES.Group | null = null;
 
     // Load GLB for agents that have one
     if (node.kind === "agent" && agentGlbPaths[node.id]) {
       const capturedIndex = index;
-      loadGlb(agentGlbPaths[node.id])
+      loadGlb(THREE, agentGlbPaths[node.id])
         .then((glb) => {
           const b = new THREE.Box3().setFromObject(glb);
           const s = new THREE.Vector3();
           b.getSize(s);
           const sc = 0.36 / Math.max(s.x, s.y, s.z);
           glb.scale.setScalar(sc);
-          (glb as THREE.Group & { _baseScale?: number })._baseScale = 1; // already normalised
+          (glb as THREE_TYPES.Group & { _baseScale?: number })._baseScale = 1;
           entries[capturedIndex].glbRoot = glb;
           ring.add(glb);
-          // hide procedural mesh — GLB takes over visual, but mesh stays for raycasting
           entries[capturedIndex].mesh.visible = false;
           invalidate();
         })
@@ -253,20 +290,19 @@ export function createMemoryScene(
       if (glbRoot) {
         glbRoot.position.set(px, py + Math.sin(clock * 1.2 + angle) * 0.05, pz);
         glbRoot.rotation.y = clock * 0.6 + angle;
-        // Scale based on selection state — store normalised scale on load, apply multiplier
-        if (!(glbRoot as THREE.Group & { _baseScale?: number })._baseScale) {
+        if (!(glbRoot as THREE_TYPES.Group & { _baseScale?: number })._baseScale) {
           const b = new THREE.Box3().setFromObject(glbRoot);
           const s = new THREE.Vector3(); b.getSize(s);
-          (glbRoot as THREE.Group & { _baseScale?: number })._baseScale = 0.36 / Math.max(s.x, s.y, s.z);
+          (glbRoot as THREE_TYPES.Group & { _baseScale?: number })._baseScale = 0.36 / Math.max(s.x, s.y, s.z);
         }
-        const bs = (glbRoot as THREE.Group & { _baseScale?: number })._baseScale!;
+        const bs = (glbRoot as THREE_TYPES.Group & { _baseScale?: number })._baseScale!;
         glbRoot.scale.setScalar(bs * scaleFactor);
         glbRoot.visible = shown;
       }
 
       label.position.set(px, py + 0.32, pz);
 
-      const attribute = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const attribute = line.geometry.getAttribute("position") as THREE_TYPES.BufferAttribute;
       attribute.setXYZ(1, px, py, pz);
       attribute.needsUpdate = true;
       line.geometry.computeBoundingSphere();
@@ -321,7 +357,6 @@ export function createMemoryScene(
       (-(e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     ray.setFromCamera(pointer, camera);
-    // Make all visible proxy meshes testable (GLB nodes have invisible mesh but same position)
     const testMeshes = pickables.filter((m) => {
       const entry = entries.find((e) => e.mesh === m);
       if (!entry) return false;
@@ -329,12 +364,10 @@ export function createMemoryScene(
         entry.node.detail.includes(state.project) ||
         entry.node.detail.includes("Global");
       if (!shown) return false;
-      // Temporarily show GLB-node proxy meshes for raycasting
       if (entry.glbRoot && !m.visible) { m.visible = true; m.userData._hiddenForRay = true; }
       return true;
     });
     const result = ray.intersectObjects(testMeshes)[0]?.object.userData.id as string | undefined;
-    // Restore hidden proxies
     testMeshes.forEach((m) => { if (m.userData._hiddenForRay) { m.visible = false; delete m.userData._hiddenForRay; } });
     return result;
   };
