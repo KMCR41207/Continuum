@@ -91,7 +91,12 @@ export function MemoryLoop() {
             />
           ))}
         </div>
-        <button className="loop-action" onClick={() => setStep((step + 1) % 4)}>
+        <button className="loop-action" aria-label={[
+              "Capture conversation — advance to extracted memory",
+              "Inspect extracted memory — advance to retrieval",
+              "Ask another agent — advance to context received",
+              "Replay the loop from the beginning",
+            ][step]} onClick={() => setStep((step + 1) % 4)}>
           {
             [
               "Capture conversation",
