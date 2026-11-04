@@ -1,0 +1,86 @@
+{
+  "title": "Continuum SaaS Architecture, Product Vision and Development Decisions",
+  "platform": "ChatGPT",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I am building a SaaS product called Continuum. It is a universal AI memory platform that allows users to maintain persistent context across different AI assistants and coding agents, including ChatGPT, Claude, Gemini, Cursor and Codex. The main problem I want to solve is that every AI conversation starts with limited knowledge of previous conversations. I want Continuum to remember important decisions, preferences, project details and technical context so users do not have to repeat themselves."
+    },
+    {
+      "role": "assistant",
+      "content": "That is a strong product direction. Continuum should function as a persistent memory and context layer rather than another AI chatbot. Its primary responsibility should be capturing authorized information, organizing it into useful memories, and providing relevant context to connected AI tools when requested. I recommend separating conversation ingestion, memory extraction, memory storage and context retrieval into independent modules."
+    },
+    {
+      "role": "user",
+      "content": "I want privacy to be one of the main selling points. Users should control exactly what gets captured, what gets remembered and which AI tools can access their memories. Nothing should be silently collected. I also want users to review extracted memories before they become permanent."
+    },
+    {
+      "role": "assistant",
+      "content": "We should implement explicit consent and granular permissions. Conversation capture, memory reading and memory writing should have separate permission scopes. Extracted memory candidates should initially have a pending-review status. Users can approve, edit or reject each candidate. Every approved memory should retain its source conversation and message references so users can understand where the information came from."
+    },
+    {
+      "role": "user",
+      "content": "For the initial self-hosted version, I want Python with FastAPI for the backend. I prefer SQLite because it is lightweight and easy to run locally. Use SQLAlchemy for database access and Alembic for migrations. For semantic memory search, I want ChromaDB with local embeddings instead of depending on a paid external embedding API."
+    },
+    {
+      "role": "assistant",
+      "content": "That is a practical architecture for a single-user or small self-hosted deployment. We can use FastAPI, Pydantic v2, SQLAlchemy 2.x, SQLite and Alembic for the application layer. ChromaDB can provide vector similarity search, with a local embedding model as the default. The SQL database should remain the canonical source of truth, while ChromaDB acts as a rebuildable search index. This prevents vector-index failures from causing permanent memory loss."
+    },
+    {
+      "role": "user",
+      "content": "I also want the architecture to support future scaling. If Continuum gets more users, I may move to PostgreSQL and pgvector. Please avoid tightly coupling the application to SQLite or ChromaDB. I want the storage and vector search layers to be replaceable."
+    },
+    {
+      "role": "assistant",
+      "content": "We should introduce repository interfaces and storage abstractions. Application services should depend on interfaces rather than database-specific implementations. The initial adapters can use SQLite and ChromaDB. A future PostgreSQL and pgvector adapter can implement the same contracts. We should also document that SQLite and ChromaDB are intended for the initial single-node deployment, not an unrestricted multi-node production architecture."
+    },
+    {
+      "role": "user",
+      "content": "For the AI connection, I want an MCP server. It should expose tools such as recall_context and save_fact. When I open Claude, Cursor or another compatible agent, it should be able to request relevant project memories from Continuum. I do not want agents accessing the database directly."
+    },
+    {
+      "role": "assistant",
+      "content": "The MCP server should act as an authenticated interface to the Continuum backend. The recall_context tool can accept a query, project identifier and optional token budget, then return relevant approved memories with source references. The save_fact tool can submit a proposed memory through the backend validation and permission system. MCP tools must never bypass authorization or write directly to the database. We should test the server using a real MCP client."
+    },
+    {
+      "role": "user",
+      "content": "I want a browser extension for ChatGPT and Claude too. However, it must be opt-in. Users should be able to enable or disable capture for each platform, pause capture and manually import conversations. Show a visible capture indicator so users always know when capture is active."
+    },
+    {
+      "role": "assistant",
+      "content": "We can build a browser extension using Chrome Manifest V3 with a modular content-script architecture. It should only process conversation content visible in the user interface and only when the user has enabled capture. Include per-platform settings, a visible status indicator, pause and resume controls, manual capture and explicit consent. Do not collect cookies, passwords, hidden application state or private undocumented APIs."
+    },
+    {
+      "role": "user",
+      "content": "The memory extraction system should distinguish between temporary conversation details and durable information. For example, a decision to use PostgreSQL for a particular project should be remembered. A temporary question about fixing a CSS margin should not automatically become a permanent memory."
+    },
+    {
+      "role": "assistant",
+      "content": "We should classify extracted information into categories such as user preferences, project facts, technical decisions, ongoing tasks and temporary context. Each candidate should include a confidence score, category, source reference and timestamp. Durable decisions and repeated preferences should receive higher priority. Temporary troubleshooting details should generally remain in conversation history unless the user explicitly saves them."
+    },
+    {
+      "role": "user",
+      "content": "For retrieval, I want hybrid search. Semantic similarity alone might miss exact technical terms, filenames or framework names. Combine vector search with keyword matching and apply project and workspace filters. Only approved memories should be returned by default."
+    },
+    {
+      "role": "assistant",
+      "content": "Agreed. The retrieval pipeline should combine semantic similarity and lexical search, then rank the results using relevance, recency and memory importance. Authorization filters must be applied before returning results. The default retrieval policy should exclude pending, rejected and deleted memories. Each result should include its memory identifier, project scope, source reference and relevant content so the receiving AI agent can understand the context."
+    },
+    {
+      "role": "user",
+      "content": "My coding preference is to build in phases. Before editing, inspect the existing code and explain the implementation plan. Do not replace entire files unnecessarily. Write production-quality code, use reusable components, validate inputs, handle errors and add meaningful tests. Never use fake dashboard metrics, placeholder integrations presented as working, or fabricated connection statuses."
+    },
+    {
+      "role": "assistant",
+      "content": "I will structure implementation around small, verifiable milestones. Each milestone should include repository inspection, a focused implementation, tests and a concise report of changed files and remaining limitations. Existing behavior should be preserved unless a change is explicitly required. Integrations must be labeled according to their actual verification status, and incomplete functionality must be disclosed rather than represented as operational."
+    },
+    {
+      "role": "user",
+      "content": "The long-term goal is to make Continuum a universal AI memory platform. A user should be able to discuss a project in ChatGPT, continue working in Claude, and then open Cursor or Codex without manually explaining the project again. The user should remain in control of their data, and the memory should work across supported AI tools."
+    },
+    {
+      "role": "assistant",
+      "content": "The central product principle is one user-controlled memory layer across multiple AI assistants. The key experience is continuity: authorized information is captured, reviewed, organized and made available to another assistant when explicitly requested. We should measure success through reliable ingestion, accurate retrieval, source traceability, permission enforcement and successful cross-agent context handoffs. A suitable positioning statement is: Every AI starts fresh. Your memory does not have to."
+    }
+  ]
+}
