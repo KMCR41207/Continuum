@@ -171,36 +171,53 @@ export function Integrations() {
             <h3>{selected.capability}</h3>
             <p>{selected.setup}</p>
             {selected.id !== "import" && (
-              <table>
-                <tbody>
-                  {[
-                    ["Native OAuth", "Unavailable"],
-                    ["Official provider API", "No capture adapter configured"],
-                    [
-                      "Explicit conversation import",
-                      "Normalized JSON; locally tested",
-                    ],
-                    ["Browser-extension capture", "Unavailable"],
-                    [
-                      "Local MCP retrieval",
-                      "Protocol tested; provider session unverified",
-                    ],
-                    [
-                      "Remote MCP retrieval",
-                      "HTTP protocol tested locally; HTTPS hosting required",
-                    ],
-                    [
-                      "Memory writing",
-                      "Scoped proposals with review; provider session unverified",
-                    ],
-                  ].map(([capability, state]) => (
-                    <tr key={capability}>
-                      <th scope="row">{capability}</th>
-                      <td>{state}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <>
+                <table>
+                  <tbody>
+                    {[
+                      ["Native OAuth", "Unavailable"],
+                      ["Official provider API", "No capture adapter configured"],
+                      [
+                        "Explicit conversation import",
+                        "Normalized JSON; locally tested",
+                      ],
+                      ["Browser-extension capture", "Unavailable"],
+                      [
+                        "Local MCP retrieval",
+                        "Protocol tested; provider session unverified",
+                      ],
+                      [
+                        "Remote MCP retrieval",
+                        "HTTP protocol tested locally; HTTPS hosting required",
+                      ],
+                      [
+                        "Memory writing",
+                        "Scoped proposals with review; provider session unverified",
+                      ],
+                    ].map(([capability, state]) => (
+                      <tr key={capability}>
+                        <th scope="row">{capability}</th>
+                        <td>{state}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {"mcpConfig" in selected && selected.mcpConfig && (
+                  <>
+                    <h4>MCP client config</h4>
+                    <p>Add this to your client's MCP configuration. Replace the path and environment values with your own.</p>
+                    <pre style={{ fontSize: "11px", overflowX: "auto", background: "#10141d", color: "#dae3f1", padding: "12px", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      <code>{selected.mcpConfig}</code>
+                    </pre>
+                  </>
+                )}
+                {"captureMethod" in selected && selected.captureMethod && (
+                  <>
+                    <h4>Conversation capture</h4>
+                    <p>{selected.captureMethod}</p>
+                  </>
+                )}
+              </>
             )}
             <TextLink
               to={selected.id === "import" ? "/app/conversations" : "/docs"}
