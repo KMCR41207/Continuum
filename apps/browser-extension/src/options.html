@@ -1,13 +1,13 @@
 <!doctype html><html><head><meta charset="utf-8"><title>Continuum capture</title></head><body>
-<h1>Continuum capture</h1><p>Only visible conversation messages and their page URL are collected. Capture stays off until you consent and enable a platform. Queued content stays in this extension on this device until upload succeeds or you clear it. Use a short-lived capture-only credential.</p>
+<h1>Continuum capture</h1><p>Only visible conversation messages and their page URL are collected. Queued content stays in this extension on this device until upload succeeds or you clear it. Use a short-lived capture-only credential.</p>
 <form id="settings">
-<label>Local service URL <input name="endpoint" value="http://127.0.0.1:8000" required></label><br>
+<label>Local service URL <input name="endpoint" value="http://127.0.0.1:3101" required></label><br>
 <label>Capture-only API token <input name="token" type="password" required autocomplete="off"></label><br>
-<label>Project ID (leave empty only with global capture grant) <input name="project"></label><br>
-<label><input name="consent" type="checkbox">I authorize capture of visible conversation content on the selected platforms</label><br>
-<label><input name="chatgpt" type="checkbox">Enable ChatGPT capture</label><br>
-<label><input name="claude" type="checkbox">Enable Claude capture</label><br>
-<label><input name="auto" type="checkbox">Automatically sync changes after explicit platform consent</label><br>
-<label><input name="paused" type="checkbox" checked>Pause all capture</label><br>
+<label>Project ID (leave empty for global capture) <input name="project"></label><br>
+<label><input name="consent" type="checkbox" checked>I authorize capture of visible conversation content on the selected platforms</label><br>
+<label><input name="chatgpt" type="checkbox" checked>Enable ChatGPT capture</label><br>
+<label><input name="claude" type="checkbox" checked>Enable Claude capture</label><br>
+<label><input name="auto" type="checkbox" checked>Automatically sync changes after explicit platform consent</label><br>
+<label><input name="paused" type="checkbox">Pause all capture</label><br>
 <button>Save preferences</button></form><button id="retry">Retry failed captures under current permissions</button><button id="clear">Delete local queued captures and history</button><p id="status" role="status"></p><pre id="history"></pre>
 <p>Delete imported conversations through Continuum → Conversations → Delete. Disconnecting does not delete imported data.</p><script type="module" src="options.js"></script></body></html>
