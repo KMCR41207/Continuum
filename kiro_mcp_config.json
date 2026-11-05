@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "continuum-kiro": {
+      "command": "node",
+      "args": ["C:\\Users\\qwert\\Desktop\\Projects\\continuum mani\\server\\kiro-mcp.ts"],
+      "env": {
+        "CONTINUUM_API_URL": "http://127.0.0.1:3101",
+        "CONTINUUM_TOKEN": "YOUR_TOKEN_FROM_CONNECTIONS_PAGE"
+      }
+    }
+  }
+}

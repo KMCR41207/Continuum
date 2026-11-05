@@ -11,6 +11,7 @@
     "test:extension": "node --test tests/extension/*.test.mjs",
     "api": "node --env-file-if-exists=.env.server server/api.ts",
     "mcp:http": "node --env-file-if-exists=.env.server server/http.ts",
+    "mcp:kiro": "node --env-file-if-exists=.env.server server/kiro-mcp.ts",
     "worker": "node --env-file-if-exists=.env.server server/worker.ts",
     "mcp": "node --env-file-if-exists=.env.server server/mcp.ts",
     "cli": "node server/cli.ts",
