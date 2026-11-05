@@ -103,11 +103,16 @@ export function PublicLayout() {
             <NavLink to="/pricing">Pricing</NavLink>
             <NavLink to="/docs">Docs</NavLink>
             <div className="nav-account">
+              {!selfHosted && (
+                <Link className="button small secondary" to="/signin">
+                  Sign in
+                </Link>
+              )}
               <Link
                 className="button small"
-                to={selfHosted ? "/app" : "/docs#setup"}
+                to={selfHosted ? "/signin" : "/signup"}
               >
-                {selfHosted ? "Open workspace" : "Setup guide"}
+                {selfHosted ? "Sign in" : "Get started"}
                 <ArrowUpRight size={14} />
               </Link>
             </div>
