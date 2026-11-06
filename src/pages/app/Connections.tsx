@@ -296,7 +296,7 @@ export function Connections() {
                     {c.capture
                       ? c.capture_paused
                         ? "paused"
-                        : "explicit import"
+                        : "on"
                       : "off"}{" "}
                     · Retrieval: {c.retrieval ? "on" : "off"} · Writing:{" "}
                     {c.writing ? "on" : "off"}
