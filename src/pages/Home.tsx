@@ -1,8 +1,9 @@
-import { ArrowRight, ArrowUpRight, Check, LockKeyhole } from "lucide-react";
+﻿import { ArrowRight, ArrowUpRight, Check, LockKeyhole } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ActionLink, Eyebrow, TextLink } from "../components/ui";
 import { MemoryLoop } from "../components/MemoryLoop";
 import { ContinuityStory } from "../components/ContinuityStory";
+import { MemoryCore } from "../components/immersive/MemoryCore";
 import { WorkflowShowcase } from "../components/immersive/WorkflowShowcase";
 import { selfHosted } from "../lib/localBackend";
 export function Home() {
@@ -18,7 +19,7 @@ export function Home() {
         <div className="hero-copy">
           <Eyebrow>
             <span className="tiny-cross">+</span> EVERY AI STARTS FRESH. YOU
-            SHOULDN’T HAVE TO.
+            SHOULDNΓÇÖT HAVE TO.
           </Eyebrow>
           <h1>
             <span className="title-line">Good thinking</span>{" "}
@@ -45,7 +46,7 @@ export function Home() {
         <div className="hero-visual">
           <div className="visual-annotation">
             <span>THE LIVING ARCHIVE</span>
-            <span>FIG. 01 ↘</span>
+            <span>FIG. 01 Γåÿ</span>
           </div>
           <div className="archive-path" aria-hidden="true">
             <span>
@@ -60,10 +61,13 @@ export function Home() {
               03 <b>Continuity</b>
             </span>
           </div>
+          <MemoryCore compact />
           <div className="visual-caption">
             <span className="caption-line" />
             <span>
-              Your thinking, connected across the AI tools you use.
+              Try the loop. One decision, a different agent.
+              <br />
+              See what gets carried forward.
             </span>
           </div>
         </div>
@@ -90,8 +94,8 @@ export function Home() {
       </section>
       <div className="scroll-ticker" aria-hidden="true">
         <div className="ticker-track">
-          A thought. <em>A thread.</em> A through line. <span>↗</span> A
-          thought. <em>A thread.</em> A through line. <span>↗</span>
+          A thought. <em>A thread.</em> A through line. <span>Γåù</span> A
+          thought. <em>A thread.</em> A through line. <span>Γåù</span>
         </div>
       </div>
       <section className="editorial-section content" id="how-it-works">
@@ -105,7 +109,7 @@ export function Home() {
         </div>
         <div className="split-section">
           <h2 className="scroll-ink">
-            {"Your best thinking shouldn’t live in separate tabs."
+            {"Your best thinking shouldnΓÇÖt live in separate tabs."
               .split(" ")
               .map((word, index) => (
                 <span key={index}>
@@ -121,7 +125,7 @@ export function Home() {
             </p>
             <p>
               Each conversation holds a piece of the picture. Switching tools
-              shouldn’t mean rebuilding it from memory—or explaining yourself
+              shouldnΓÇÖt mean rebuilding it from memoryΓÇöor explaining yourself
               all over again.
             </p>
             <div className="context-comparison">
@@ -193,7 +197,7 @@ export function Home() {
         </div>
         <div className="memory-preview">
           <div className="archive-tab">
-            A RECORD, NOT A BLACK BOX <span>↓</span>
+            A RECORD, NOT A BLACK BOX <span>Γåô</span>
           </div>
           <div className="preview-header">
             <span>MEMORY DETAIL</span>
@@ -202,14 +206,14 @@ export function Home() {
           <div className="preview-content">
             <span className="pill">Preference</span>
             <h3>
-              “Keep explanations concise.
+              ΓÇ£Keep explanations concise.
               <br />
-              Include a practical example.”
+              Include a practical example.ΓÇ¥
             </h3>
             <dl>
               <div>
                 <dt>Scope</dt>
-                <dd>Personal · All projects</dd>
+                <dd>Personal ┬╖ All projects</dd>
               </div>
               <div>
                 <dt>Evidence</dt>
@@ -271,7 +275,7 @@ export function Home() {
             Keep the parts that make the next one better.
           </p>
           <span className="closing-mark" aria-hidden="true">
-            ↗
+            Γåù
           </span>
         </div>
       </section>

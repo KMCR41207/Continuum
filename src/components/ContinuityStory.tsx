@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUpRight,
@@ -8,6 +8,7 @@ import {
   Layers,
 } from "lucide-react";
 import { Eyebrow } from "./ui";
+import { MemoryCore } from "./immersive/MemoryCore";
 
 const chapters = [
   {
@@ -18,8 +19,8 @@ const chapters = [
     icon: FileText,
     label: "01 / ORIGINAL STATEMENT",
     example:
-      "“Let’s use PostgreSQL. We need relational data and transactional consistency.”",
-    detail: "Project Atlas · Authorized conversation import",
+      "ΓÇ£LetΓÇÖs use PostgreSQL. We need relational data and transactional consistency.ΓÇ¥",
+    detail: "Project Atlas ┬╖ Authorized conversation import",
   },
   {
     id: "understand",
@@ -29,7 +30,7 @@ const chapters = [
     icon: Layers,
     label: "02 / PROPOSED MEMORY",
     example: "PostgreSQL is the selected database for Project Atlas.",
-    detail: "Decision · Source attached · Awaiting your review",
+    detail: "Decision ┬╖ Source attached ┬╖ Awaiting your review",
   },
   {
     id: "remember",
@@ -39,7 +40,7 @@ const chapters = [
     icon: GitBranch,
     label: "03 / REVIEWED CONTEXT",
     example: "Project Atlas / Architecture / Database decision",
-    detail: "Approved by you · Version 1 · Project-scoped",
+    detail: "Approved by you ┬╖ Version 1 ┬╖ Project-scoped",
   },
   {
     id: "reuse",
@@ -49,8 +50,8 @@ const chapters = [
     icon: ArrowUpRight,
     label: "04 / AUTHORIZED RETRIEVAL",
     example:
-      "“We’re using PostgreSQL for Atlas. I have the decision and its source.”",
-    detail: "Scoped agent access · Original evidence included",
+      "ΓÇ£WeΓÇÖre using PostgreSQL for Atlas. I have the decision and its source.ΓÇ¥",
+    detail: "Scoped agent access ┬╖ Original evidence included",
   },
 ] as const;
 
@@ -92,7 +93,7 @@ export function ContinuityStory() {
           </h2>
           <p>
             A useful memory is more than a saved transcript. It is a decision, a
-            preference, or a piece of context—with the evidence behind it.
+            preference, or a piece of contextΓÇöwith the evidence behind it.
           </p>
           <nav className="story-index" aria-label="Memory lifecycle">
             {chapters.map((chapter, index) => (
@@ -110,6 +111,9 @@ export function ContinuityStory() {
           <span className="story-note">
             <ArrowDown size={14} /> Follow one decision through the loop.
           </span>
+          <div className="story-core-wrap">
+            <MemoryCore compact narrative />
+          </div>
         </div>
         <div className="story-chapters">
           {chapters.map(
