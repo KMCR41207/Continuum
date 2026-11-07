@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { Menu, X, ArrowUpRight } from "lucide-react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Menu, X, ArrowUpRight, User, LogOut, LayoutDashboard } from "lucide-react";
 import { Brand } from "./ui";
 import { brand } from "../config/brand";
 import { selfHosted } from "../lib/localBackend";
+import { useAuth } from "../lib/AuthContext";
+import { db } from "../lib/supabase";
 import { useEditorialMotion } from "../lib/useEditorialMotion";
 import { useAos } from "../lib/useAos";
 import "../styles/editorial.css";
@@ -11,7 +13,11 @@ import "../styles/motion.css";
 import "../styles/immersive.css";
 export function PublicLayout() {
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  const profileRef = useRef<HTMLDivElement>(null);
   const site = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const [userReduced, setUserReduced] = useState(() => {
@@ -69,6 +75,27 @@ export function PublicLayout() {
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, [open]);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    if (!profileOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [profileOpen]);
+
+  async function signOut() {
+    await db().auth.signOut();
+    setProfileOpen(false);
+    navigate("/");
+  }
+
+  const userEmail = session?.user?.email ?? "";
+  const userInitial = userEmail ? userEmail[0].toUpperCase() : "U";
   return (
     <div
       className="public-site"
@@ -103,18 +130,66 @@ export function PublicLayout() {
             <NavLink to="/pricing">Pricing</NavLink>
             <NavLink to="/docs">Docs</NavLink>
             <div className="nav-account">
-              {!selfHosted && (
-                <Link className="button small secondary" to="/signin">
-                  Sign in
-                </Link>
-              )}
-              <Link
-                className="button small"
-                to={selfHosted ? "/signin" : "/signup"}
-              >
-                {selfHosted ? "Sign in" : "Get started"}
-                <ArrowUpRight size={14} />
+              {/* Always show Open App button */}
+              <Link className="button small" to="/app" aria-label="Open workspace">
+                <LayoutDashboard size={14} />
+                Open app
               </Link>
+
+              {session ? (
+                /* Logged in: show profile avatar button with dropdown */
+                <div className="nav-profile" ref={profileRef}>
+                  <button
+                    className="profile-avatar"
+                    aria-label="Profile menu"
+                    aria-expanded={profileOpen}
+                    onClick={() => setProfileOpen(!profileOpen)}
+                  >
+                    {userInitial}
+                  </button>
+                  {profileOpen && (
+                    <div className="profile-dropdown" role="menu">
+                      <div className="profile-email">{userEmail}</div>
+                      <Link
+                        className="profile-item"
+                        to="/app"
+                        role="menuitem"
+                        onClick={() => setProfileOpen(false)}
+                      >
+                        <LayoutDashboard size={14} /> Workspace
+                      </Link>
+                      <Link
+                        className="profile-item"
+                        to="/app/settings"
+                        role="menuitem"
+                        onClick={() => setProfileOpen(false)}
+                      >
+                        <User size={14} /> Profile & settings
+                      </Link>
+                      <button
+                        className="profile-item profile-signout"
+                        role="menuitem"
+                        onClick={() => void signOut()}
+                      >
+                        <LogOut size={14} /> Sign out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Not logged in: show Sign in + Get started */
+                <>
+                  <Link className="button small secondary" to="/signin">
+                    Sign in
+                  </Link>
+                  {!selfHosted && (
+                    <Link className="button small" to="/signup">
+                      Get started
+                      <ArrowUpRight size={14} />
+                    </Link>
+                  )}
+                </>
+              )}
             </div>
           </nav>
         </div>
