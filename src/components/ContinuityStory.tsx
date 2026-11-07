@@ -8,7 +8,6 @@ import {
   Layers,
 } from "lucide-react";
 import { Eyebrow } from "./ui";
-import { MemoryCore } from "./immersive/MemoryCore";
 
 const chapters = [
   {
@@ -111,9 +110,6 @@ export function ContinuityStory() {
           <span className="story-note">
             <ArrowDown size={14} /> Follow one decision through the loop.
           </span>
-          <div className="story-core-wrap">
-            <MemoryCore compact narrative />
-          </div>
         </div>
         <div className="story-chapters">
           {chapters.map(

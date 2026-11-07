@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { ActionLink, Eyebrow, TextLink } from "../components/ui";
 import { MemoryLoop } from "../components/MemoryLoop";
 import { ContinuityStory } from "../components/ContinuityStory";
-import { MemoryCore } from "../components/immersive/MemoryCore";
 import { WorkflowShowcase } from "../components/immersive/WorkflowShowcase";
 import { selfHosted } from "../lib/localBackend";
 export function Home() {
@@ -61,13 +60,10 @@ export function Home() {
               03 <b>Continuity</b>
             </span>
           </div>
-          <MemoryCore compact />
           <div className="visual-caption">
             <span className="caption-line" />
             <span>
-              Try the loop. One decision, a different agent.
-              <br />
-              See what gets carried forward.
+              Your thinking, connected across the AI tools you use.
             </span>
           </div>
         </div>
