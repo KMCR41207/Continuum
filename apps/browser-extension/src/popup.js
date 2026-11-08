@@ -32,12 +32,17 @@ async function init() {
   setPill(autoPill, config.auto, "ON", "OFF", "on");
   setPill(pausedPill, config.paused, "YES", "NO");
 
-  // Test connection
+  // Check if configured at all
   if (!config.token) {
-    setStatus("⚠ No token — open Settings to configure", "err");
+    setStatus("⚠ Not configured — click Settings", "err");
+    return;
+  }
+  if (!config.supabaseUrl || !config.supabaseKey) {
+    setStatus("⚠ Missing Supabase URL/key — click Settings", "err");
     return;
   }
 
+  // Test connection
   try {
     await testConnection(config);
     setStatus("✓ Connected to Continuum", "ok");

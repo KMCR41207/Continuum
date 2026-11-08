@@ -26,10 +26,9 @@ for (const browser of ["chrome", "firefox"]) {
     host_permissions: [
       "https://chatgpt.com/*",
       "https://claude.ai/*",
+      "https://*.supabase.co/*",
     ],
     optional_host_permissions: [
-      // Supabase — always needed for direct RPC
-      "https://*.supabase.co/*",
       // Local fallback
       "http://127.0.0.1/*",
       "http://localhost/*",
