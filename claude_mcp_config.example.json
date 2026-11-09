@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "continuum": {
+      "command": "node",
+      "args": ["/absolute/path/to/continuum/server/mcp.ts"],
+      "env": {
+        "CONTINUUM_SUPABASE_URL": "https://your-project.supabase.co",
+        "CONTINUUM_SUPABASE_KEY": "your_supabase_anon_key",
+        "CONTINUUM_TOKEN": "ctm_your_token_from_connections_page"
+      }
+    }
+  }
+}
