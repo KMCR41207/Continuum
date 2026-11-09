@@ -13,3 +13,12 @@ data/
 *.pyc
 apps/browser-extension/build/
 package-lock.json
+
+# MCP config files may contain real tokens — keep only examples in git
+claude_mcp_config.json
+kiro_mcp_config.json
+*.mcp_config.json
+*_mcp_config.local.json
+
+# Session summaries with tokens/keys
+SESSION-SUMMARY-*.md
