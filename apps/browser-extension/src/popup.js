@@ -34,11 +34,11 @@ async function init() {
 
   // Check if configured at all
   if (!config.token) {
-    setStatus("⚠ Not configured — click Settings", "err");
+    setStatus("⚠ No token — click Settings to configure", "err");
     return;
   }
-  if (!config.supabaseUrl || !config.supabaseKey) {
-    setStatus("⚠ Missing Supabase URL/key — click Settings", "err");
+  if (!config.endpoint) {
+    setStatus("⚠ No endpoint — click Settings", "err");
     return;
   }
 

@@ -11,16 +11,13 @@ function setStatus(text, type) {
   statusEl.className = type || "";
 }
 
-// ── Load saved settings into form ────────────────────────────────────────────
+// ── Load saved settings ───────────────────────────────────────────────────────
 const config = await settings();
 
-const textFields = ["supabaseUrl", "supabaseKey", "token"];
-for (const name of textFields) {
-  if (form.elements[name]) form.elements[name].value = config[name] || "";
-}
+form.elements["endpoint"].value = config.endpoint || "http://127.0.0.1:3101";
+form.elements["token"].value = config.token || "";
 
-const checkboxFields = ["consent", "chatgpt", "claude", "auto", "paused"];
-for (const name of checkboxFields) {
+for (const name of ["consent", "chatgpt", "claude", "auto", "paused"]) {
   if (form.elements[name]) form.elements[name].checked = Boolean(config[name]);
 }
 
@@ -30,11 +27,8 @@ historyEl.textContent = config.history.length > 0
 
 // ── Load projects ─────────────────────────────────────────────────────────────
 async function loadProjects(cfg) {
-  // Reset to just the global option
   while (projectSelect.options.length > 1) projectSelect.remove(1);
-
-  if (!cfg.token || !cfg.supabaseUrl) return;
-
+  if (!cfg.token || !cfg.endpoint) return;
   try {
     const projects = await fetchProjects(cfg);
     projects.forEach((p) => {
@@ -45,55 +39,37 @@ async function loadProjects(cfg) {
       projectSelect.appendChild(opt);
     });
     if (!cfg.project) projectSelect.value = "";
-  } catch {
-    // Non-fatal
-  }
+  } catch { /* non-fatal */ }
 }
 await loadProjects(config);
 
 // ── Save form ─────────────────────────────────────────────────────────────────
 async function saveForm() {
-  const data = {};
-
-  for (const name of textFields) {
-    data[name] = (form.elements[name]?.value || "").trim();
-  }
-  for (const name of checkboxFields) {
+  const data = {
+    endpoint: (form.elements["endpoint"].value || "").trim(),
+    token: (form.elements["token"].value || "").trim(),
+  };
+  for (const name of ["consent", "chatgpt", "claude", "auto", "paused"]) {
     data[name] = form.elements[name]?.checked ?? false;
   }
-
-  // Save selected project and its name
   const selectedOpt = projectSelect.options[projectSelect.selectedIndex];
   data.project = projectSelect.value || "";
   data.projectName = data.project ? (selectedOpt?.textContent || "") : "";
 
-  // Validate URL if provided
-  if (data.supabaseUrl) {
+  if (data.endpoint) {
     try {
-      const u = new URL(data.supabaseUrl);
-      if (u.protocol !== "https:") throw new Error("Supabase URL must use HTTPS");
+      const u = new URL(data.endpoint);
+      if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("Invalid protocol");
+      await api.permissions.request({ origins: [u.origin + "/*"] });
     } catch (err) {
-      setStatus(`Invalid Supabase URL: ${err.message}`, "err");
+      setStatus(`Invalid endpoint: ${err.message}`, "err");
       return false;
     }
   }
 
-  // Request host permissions for Supabase URL
-  if (data.supabaseUrl) {
-    try {
-      const origin = new URL(data.supabaseUrl).origin + "/*";
-      await api.permissions.request({ origins: [origin] });
-    } catch {
-      // Ignore — permissions may already be granted or optional
-    }
-  }
-
   await save(data);
-  setStatus("Preferences saved.", "ok");
-
-  // Reload projects with new config
+  setStatus("Saved.", "ok");
   await loadProjects(data);
-
   return true;
 }
 
@@ -104,58 +80,52 @@ form.addEventListener("submit", async (e) => {
 });
 
 // Auto-save checkboxes
-for (const name of checkboxFields) {
-  form.elements[name]?.addEventListener("change", async () => {
-    await saveForm();
-  });
+for (const name of ["consent", "chatgpt", "claude", "auto", "paused"]) {
+  form.elements[name]?.addEventListener("change", () => saveForm());
 }
 
-// Auto-save token after change (debounced)
+// Auto-save token (debounced)
 let tokenTimer;
 form.elements["token"]?.addEventListener("input", () => {
   clearTimeout(tokenTimer);
-  tokenTimer = setTimeout(async () => {
-    if (form.elements["token"].value.length > 10) {
-      await saveForm();
-    }
+  tokenTimer = setTimeout(() => {
+    if (form.elements["token"].value.length > 10) saveForm();
   }, 800);
 });
 
-// Auto-save on project change
+// Project change
 projectSelect.addEventListener("change", async () => {
   await saveForm();
   const name = projectSelect.options[projectSelect.selectedIndex]?.textContent || "";
-  setStatus(projectSelect.value ? `Project set to: ${name}` : "Project: global (unassigned)", "ok");
+  setStatus(projectSelect.value ? `Project: ${name}` : "Project: global", "ok");
 });
 
 // ── Test connection ───────────────────────────────────────────────────────────
 document.querySelector("#test-btn").addEventListener("click", async () => {
-  setStatus("Testing connection…");
+  setStatus("Testing…");
   try {
     await saveForm();
     const cfg = await settings();
     const result = await testConnection(cfg);
-    const perms = [];
-    if (result.capture) perms.push("capture");
-    if (result.retrieval) perms.push("retrieval");
-    if (result.writing) perms.push("writing");
+    const perms = ["capture", "retrieval", "writing"].filter((k) => result[k]);
     setStatus(`✓ Connected. Permissions: ${perms.join(", ") || "none"}`, "ok");
+    await loadProjects(cfg);
   } catch (err) {
     setStatus(`✗ ${err.message}`, "err");
   }
 });
 
-// ── Retry failed captures ─────────────────────────────────────────────────────
+// ── Retry ─────────────────────────────────────────────────────────────────────
 document.querySelector("#retry").addEventListener("click", async () => {
   const current = await settings();
   await save({ queue: current.queue.map((item) => ({ ...item, attempts: 0, next: 0 })) });
   await api.runtime.sendMessage({ type: "flush" });
-  setStatus("Retry requested. Results will appear in history.", "ok");
+  setStatus("Retry requested.", "ok");
 });
 
-// ── Clear queue ───────────────────────────────────────────────────────────────
+// ── Clear ─────────────────────────────────────────────────────────────────────
 document.querySelector("#clear").addEventListener("click", async () => {
   await save({ queue: [], history: [], sent: [] });
   historyEl.textContent = "No history yet.";
-  setStatus("Queue and history cleared.", "ok");
+  setStatus("Cleared.", "ok");
 });

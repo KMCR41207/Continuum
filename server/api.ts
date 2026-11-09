@@ -131,6 +131,41 @@ export function createApiServer(env: NodeJS.ProcessEnv = process.env) {
       send(200, { service: "continuum-api", configured });
       return;
     }
+    // ── Agent proxy endpoints — extension sends token, server holds Supabase keys ──
+    const agentRoutes: Record<string, string> = {
+      "/api/v1/agent/capture_conversation": "capture_conversation",
+      "/api/v1/agent/test_connection": "test_connection",
+      "/api/v1/agent/list_projects": "list_projects",
+      "/api/v1/agent/search_memory": "search_memory",
+      "/api/v1/agent/get_recent_context": "get_recent_context",
+    };
+    if (req.method === "POST" && req.url && agentRoutes[req.url]) {
+      const operation = agentRoutes[req.url];
+      const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
+      if (!token) { send(401, { error: "Token required" }); return; }
+      let raw: Buffer;
+      try { raw = await readBody(req, 2000000); } catch { send(413, { error: "Request too large" }); return; }
+      const body = (() => { try { return JSON.parse(raw.toString("utf8")); } catch { return {}; } })();
+      if (!env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) {
+        send(503, { error: "Server not configured with Supabase credentials" });
+        return;
+      }
+      try {
+        const rpcUrl = new URL("/rest/v1/rpc/agent_request", env.SUPABASE_URL);
+        const rpcRes = await fetch(rpcUrl.toString(), {
+          method: "POST",
+          headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ p_token: token, p_operation: operation, p_args: body }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const result = await rpcRes.json() as Record<string, unknown>;
+        if (!rpcRes.ok) { send(rpcRes.status, result); return; }
+        send(200, result);
+      } catch (err) {
+        send(502, { error: err instanceof Error ? err.message : "Upstream error" });
+      }
+      return;
+    }
     if (req.method !== "POST") {
       send(405, { error: "POST required" });
       return;
