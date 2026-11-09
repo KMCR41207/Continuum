@@ -21,8 +21,8 @@ async function flush() {
     if (!current[item.provider]) continue;
     if (item.attempts >= 5) continue;
     if (item.next > Date.now()) continue;
-    // Endpoint and supabase config must match what was set at capture time
-    if (item.supabaseUrl !== current.supabaseUrl) continue;
+    // Endpoint must match what was set at capture time
+    if (item.endpoint !== current.endpoint) continue;
 
     try {
       await upload(current, item.conversation);
@@ -59,7 +59,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
         auto: config.auto,
         project: config.project || null,
         projectName: config.projectName || null,
-        connected: Boolean(config.token && (config.supabaseUrl || config.endpoint)),
+        connected: Boolean(config.token && config.endpoint),
       };
     }
 
@@ -106,7 +106,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
               hash,
               provider,
               conversation,
-              supabaseUrl: config.supabaseUrl,
+              endpoint: config.endpoint,
               project: config.project || null,
               projectName: config.projectName || null,
               attempts: 0,
