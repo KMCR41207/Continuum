@@ -44,7 +44,7 @@ test("background capture enforces consent, platform, pause, automatic opt-in, au
   assert.ok((await send()).error);
   assert.equal(requests.length, 0);
 
-  // Set state with endpoint-based config (legacy path used when no supabaseUrl)
+  // Set state with token+endpoint config (no Supabase keys in extension)
   state = {
     consent: true,
     chatgpt: true,
@@ -52,8 +52,6 @@ test("background capture enforces consent, platform, pause, automatic opt-in, au
     paused: false,
     auto: false,
     token: "ctm_capture_only_fixture",
-    supabaseUrl: "",
-    supabaseKey: "",
     endpoint: "http://127.0.0.1:8000",
     project: "project-id",
     projectName: "Test Project",
@@ -105,9 +103,10 @@ test("background capture enforces consent, platform, pause, automatic opt-in, au
   assert.equal(state.queue[0].attempts, 1);
   assert.ok(state.queue[0].next > Date.now());
 
-  // Queue persists project
+  // Queue persists project and endpoint (not Supabase keys)
   const persisted = structuredClone(state);
   assert.equal(persisted.queue[0].project, "project-id");
+  assert.equal(persisted.queue[0].endpoint, "http://127.0.0.1:8000");
 
   // No token in history
   assert.ok(!JSON.stringify(state.history).includes("ctm_"));
