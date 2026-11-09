@@ -1,11 +1,9 @@
 export const api = globalThis.browser || globalThis.chrome;
 
 export const defaults = {
-  // Auth
-  supabaseUrl: "",
-  supabaseKey: "",
+  // Auth — token only, no Supabase credentials in browser extension
   token: "",
-  // Legacy local endpoint (fallback only)
+  // Local Continuum API endpoint (never expose Supabase keys in extension)
   endpoint: "http://127.0.0.1:3101",
   // Capture settings
   consent: true,
