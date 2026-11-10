@@ -4,50 +4,221 @@
   <meta charset="utf-8">
   <title>Continuum</title>
   <style>
-    body { font: 13px/1.5 sans-serif; margin: 0; padding: 12px; width: 280px; background: #10141d; color: #dae3f1; }
-    h1 { font-size: 14px; margin: 0 0 10px; color: #fff; letter-spacing: 0.04em; }
-    .status { padding: 8px 10px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; background: #1a2535; border: 1px solid #2a3a55; }
-    .status.ok { border-color: #2a5a2a; background: #1a2e1a; }
-    .status.err { border-color: #5a2a2a; background: #2e1a1a; }
-    .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-    .row label { font-size: 12px; color: #89909d; }
-    .pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #1e2d40; border: 1px solid #2a3a55; }
-    .pill.on { background: #1a3a1a; border-color: #2a5a2a; color: #7fba7f; }
-    select { background: #1a2535; color: #dae3f1; border: 1px solid #2a3a55; border-radius: 3px; font-size: 12px; padding: 4px 6px; width: 100%; margin-bottom: 8px; }
-    button { background: #2a3a55; color: #dae3f1; border: 1px solid #3a4a65; border-radius: 3px; font-size: 12px; padding: 6px 10px; cursor: pointer; width: 100%; margin-bottom: 6px; }
-    button:hover { background: #3a4a65; }
-    button.primary { background: #1a3a6a; border-color: #2a5a9a; }
-    button.primary:hover { background: #2a4a7a; }
-    .loading { color: #89909d; font-size: 12px; }
-    .sep { border: none; border-top: 1px solid #1e2d40; margin: 10px 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      width: 300px;
+      background: #0d1117;
+      color: #c9d1d9;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid #21262d;
+    }
+    .logo {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+    }
+    .header-text h1 { font-size: 14px; font-weight: 600; color: #f0f6fc; }
+    .header-text p  { font-size: 11px; color: #8b949e; }
+
+    /* ── Status banner ── */
+    .status-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      font-size: 12px;
+      border-bottom: 1px solid #21262d;
+      background: #161b22;
+      min-height: 40px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #8b949e;
+    }
+    .status-dot.ok  { background: #3fb950; box-shadow: 0 0 6px #3fb95066; }
+    .status-dot.err { background: #f85149; box-shadow: 0 0 6px #f8514966; }
+    .status-dot.warn { background: #d29922; }
+    #status-text { color: #c9d1d9; flex: 1; }
+
+    /* ── Body ── */
+    .body { padding: 12px 16px; }
+
+    /* ── Toggle rows ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .toggle-row:last-of-type { border-bottom: none; }
+    .toggle-label { font-size: 12px; color: #8b949e; }
+    .badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 20px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .badge-on  { background: #1f4a1f; color: #3fb950; border: 1px solid #2a6a2a; }
+    .badge-off { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
+    .badge-pause { background: #3a2a0a; color: #d29922; border: 1px solid #5a4010; }
+
+    /* ── Project selector ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+      margin: 14px 0 6px;
+    }
+    select {
+      width: 100%;
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      font-size: 12px;
+      padding: 7px 10px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      cursor: pointer;
+    }
+    select:focus { outline: none; border-color: #388bfd; }
+
+    /* ── Buttons ── */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    button {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .btn-primary {
+      background: #1f6feb;
+      border-color: #388bfd;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #388bfd; }
+    .btn-primary:disabled { opacity: 0.5; cursor: default; }
+    .btn-secondary {
+      background: #21262d;
+      border-color: #30363d;
+      color: #c9d1d9;
+    }
+    .btn-secondary:hover { background: #30363d; }
+
+    /* ── Last status ── */
+    .last-status {
+      margin-top: 12px;
+      padding: 8px 10px;
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #8b949e;
+      min-height: 32px;
+      line-height: 1.4;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      padding: 10px 16px;
+      border-top: 1px solid #21262d;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .footer a {
+      font-size: 11px;
+      color: #388bfd;
+      text-decoration: none;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <h1>Continuum capture</h1>
-  <div id="status-box" class="status loading">Loading…</div>
-
-  <div class="row">
-    <label>Auto capture</label>
-    <span id="auto-pill" class="pill">—</span>
-  </div>
-  <div class="row">
-    <label>Capture paused</label>
-    <span id="paused-pill" class="pill">—</span>
+  <div class="header">
+    <div class="logo">C</div>
+    <div class="header-text">
+      <h1>Continuum</h1>
+      <p>Memory capture</p>
+    </div>
   </div>
 
-  <hr class="sep">
+  <div class="status-banner">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
 
-  <label style="font-size:12px;color:#89909d;display:block;margin-bottom:4px">Destination project</label>
-  <select id="project-select">
-    <option value="">Global (no project)</option>
-  </select>
+  <div class="body">
+    <div class="toggle-row">
+      <span class="toggle-label">Auto capture</span>
+      <span class="badge badge-off" id="auto-badge">—</span>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Capture paused</span>
+      <span class="badge badge-off" id="paused-badge">—</span>
+    </div>
 
-  <button class="primary" id="capture-now">⚡ Capture now</button>
-  <button id="open-options">⚙ Settings</button>
+    <p class="section-label">Destination project</p>
+    <select id="project-select">
+      <option value="">Global (no project)</option>
+    </select>
 
-  <hr class="sep">
-  <div id="last-status" style="font-size:11px;color:#89909d;min-height:16px"></div>
+    <div class="btn-row">
+      <button class="btn-primary" id="capture-now">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Capture now
+      </button>
+      <button class="btn-secondary" id="open-options">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+        Settings
+      </button>
+    </div>
 
-  <script src="popup.js"></script>
+    <div class="last-status" id="last-status">No recent activity.</div>
+  </div>
+
+  <div class="footer">
+    <button class="footer a" id="open-continuum">Open Continuum ↗</button>
+  </div>
+
+  <script type="module" src="popup.js"></script>
 </body>
 </html>
