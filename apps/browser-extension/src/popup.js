@@ -1,53 +1,70 @@
 import { api, settings, save } from "./lib/storage.js";
 import { fetchProjects, testConnection } from "./lib/api.js";
 
-const statusBox = document.querySelector("#status-box");
-const autoPill = document.querySelector("#auto-pill");
-const pausedPill = document.querySelector("#paused-pill");
-const projectSelect = document.querySelector("#project-select");
-const captureBtn = document.querySelector("#capture-now");
-const optionsBtn = document.querySelector("#open-options");
-const lastStatus = document.querySelector("#last-status");
+const statusDot   = document.querySelector("#status-dot");
+const statusText  = document.querySelector("#status-text");
+const autoBadge   = document.querySelector("#auto-badge");
+const pausedBadge = document.querySelector("#paused-badge");
+const projectSel  = document.querySelector("#project-select");
+const captureBtn  = document.querySelector("#capture-now");
+const optionsBtn  = document.querySelector("#open-options");
+const lastStatus  = document.querySelector("#last-status");
+const openLink    = document.querySelector("#open-continuum");
 
 function setStatus(text, type) {
-  statusBox.textContent = text;
-  statusBox.className = "status" + (type ? ` ${type}` : "");
+  statusText.textContent = text;
+  statusDot.className = "status-dot" + (type ? ` ${type}` : "");
 }
 
-function setPill(el, value, trueLabel, falseLabel, trueClass) {
-  el.textContent = value ? trueLabel : falseLabel;
-  el.className = "pill" + (value && trueClass ? ` ${trueClass}` : "");
+function setBadge(el, value, onLabel, offLabel, pauseMode) {
+  if (pauseMode) {
+    el.textContent = "Paused";
+    el.className = "badge badge-pause";
+  } else if (value) {
+    el.textContent = onLabel;
+    el.className = "badge badge-on";
+  } else {
+    el.textContent = offLabel;
+    el.className = "badge badge-off";
+  }
 }
 
 async function init() {
   const config = await settings();
 
   // Show history
-  if (config.history.length > 0) {
+  if (config.history?.length > 0) {
     const last = config.history[0];
-    lastStatus.textContent = `Last: ${last.status}`;
+    lastStatus.textContent = last.status;
   }
 
-  // Set pills
-  setPill(autoPill, config.auto, "ON", "OFF", "on");
-  setPill(pausedPill, config.paused, "YES", "NO");
+  // Auto / paused badges
+  setBadge(autoBadge, config.auto, "On", "Off");
+  setBadge(pausedBadge, config.paused, "Yes", "No", config.paused);
 
-  // Check if configured at all
+  // Not configured
   if (!config.token) {
-    setStatus("⚠ No token — click Settings to configure", "err");
+    setStatus("Not configured — open Settings", "err");
     return;
   }
   if (!config.endpoint) {
-    setStatus("⚠ No endpoint — click Settings", "err");
+    setStatus("No endpoint — open Settings", "err");
     return;
   }
 
   // Test connection
   try {
+    setStatus("Connecting…");
     await testConnection(config);
-    setStatus("✓ Connected to Continuum", "ok");
+    if (config.paused) {
+      setStatus("Connected — capture paused", "warn");
+    } else if (!config.auto) {
+      setStatus("Connected — manual capture only", "warn");
+    } else {
+      setStatus("Connected — auto capture active", "ok");
+    }
   } catch (err) {
-    setStatus(`✗ ${err.message}`, "err");
+    setStatus(err.message, "err");
     return;
   }
 
@@ -59,47 +76,48 @@ async function init() {
       opt.value = p.id;
       opt.textContent = p.name;
       if (p.id === config.project) opt.selected = true;
-      projectSelect.appendChild(opt);
+      projectSel.appendChild(opt);
     });
-    if (!config.project) projectSelect.value = "";
-  } catch {
-    // Non-fatal — project list just won't populate
-  }
+    if (!config.project) projectSel.value = "";
+  } catch { /* non-fatal */ }
 }
 
 // Project selection
-projectSelect.addEventListener("change", async () => {
-  const id = projectSelect.value;
-  const name = id ? projectSelect.options[projectSelect.selectedIndex].textContent : "";
+projectSel.addEventListener("change", async () => {
+  const id = projectSel.value;
+  const name = id ? projectSel.options[projectSel.selectedIndex].textContent : "";
   await save({ project: id, projectName: name });
-  // Notify background
   await api.runtime.sendMessage({ type: "set_project", project: id, projectName: name });
-  lastStatus.textContent = id ? `Project set: ${name}` : "Project: global";
+  lastStatus.textContent = id ? `Project set → ${name}` : "Project: global";
 });
 
-// Capture now — sends to active tab
+// Capture now
 captureBtn.addEventListener("click", async () => {
   captureBtn.disabled = true;
+  const orig = captureBtn.innerHTML;
   captureBtn.textContent = "Capturing…";
   try {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) { lastStatus.textContent = "No active tab"; return; }
+    if (!tab?.id) { lastStatus.textContent = "No active tab."; return; }
     const hostname = new URL(tab.url || "").hostname;
     if (!["chatgpt.com", "claude.ai"].includes(hostname)) {
-      lastStatus.textContent = "Open ChatGPT or Claude first";
+      lastStatus.textContent = "Open ChatGPT or Claude first.";
       return;
     }
-    // Trigger manual sync in content script
     const response = await api.tabs.sendMessage(tab.id, { type: "manual_capture" });
-    lastStatus.textContent = response?.status || response?.error || "Done";
+    lastStatus.textContent = response?.status || response?.error || "Done.";
   } catch (err) {
     lastStatus.textContent = `Error: ${err.message}`;
   } finally {
     captureBtn.disabled = false;
-    captureBtn.textContent = "⚡ Capture now";
+    captureBtn.innerHTML = orig;
   }
 });
 
 optionsBtn.addEventListener("click", () => api.runtime.openOptionsPage());
+
+openLink.addEventListener("click", () => {
+  api.tabs.create({ url: "http://127.0.0.1:5173/app/conversations" });
+});
 
 init();
