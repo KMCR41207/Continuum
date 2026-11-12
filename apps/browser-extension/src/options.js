@@ -8,7 +8,7 @@ const projectSelect = document.querySelector("#project-select");
 
 function setStatus(text, type) {
   statusEl.textContent = text;
-  statusEl.className = type || "";
+  statusEl.className = ["show", type].filter(Boolean).join(" ");
 }
 
 // ── Load saved settings ───────────────────────────────────────────────────────
