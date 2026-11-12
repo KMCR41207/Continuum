@@ -54,12 +54,14 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
     // ── Status query from content script ──────────────────────────────────
     if (message.type === "status") {
       const config = await settings();
+      const hasToken = Boolean(config.token && config.token.startsWith("ctm_"));
+      const hasEndpoint = Boolean(config.endpoint);
       return {
         active: config.consent && config[message.provider] && !config.paused,
         auto: config.auto,
         project: config.project || null,
         projectName: config.projectName || null,
-        connected: Boolean(config.token && config.endpoint),
+        connected: hasToken && hasEndpoint,
       };
     }
 
@@ -162,6 +164,14 @@ api.alarms.onAlarm.addListener(() => {
 });
 
 // Lock storage from content scripts on install/update
+// NOTE: Do NOT use TRUSTED_CONTEXTS — it blocks the service worker itself
+// from reading storage after Chrome restarts it (MV3 lifecycle issue).
 api.runtime.onInstalled.addListener(async () => {
-  await api.storage.local.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" });
+  // Reset to DEFAULT so the service worker can always read storage,
+  // even after Chrome terminates and restarts it.
+  await api.storage.local.setAccessLevel?.({ accessLevel: "DEFAULT" });
 });
+
+// Also reset on every service worker startup in case it was previously
+// set to TRUSTED_CONTEXTS. This fixes existing installs.
+api.storage.local.setAccessLevel?.({ accessLevel: "DEFAULT" }).catch(() => {});
