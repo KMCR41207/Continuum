@@ -4,6 +4,26 @@
   const provider = hostname === "chatgpt.com" ? "chatgpt" : hostname === "claude.ai" ? "claude" : null;
   if (!provider) return;
 
+  // Wrapper: sendMessage with a timeout so the badge never hangs on "loading…"
+  function sendMessage(msg, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+      try {
+        api.runtime.sendMessage(msg, (response) => {
+          clearTimeout(timer);
+          if (api.runtime.lastError) {
+            reject(new Error(api.runtime.lastError.message));
+          } else {
+            resolve(response);
+          }
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        reject(err);
+      }
+    });
+  }
+
   // ── Provider-specific message extractors ────────────────────────────────
   const visible = (node) =>
     Boolean(node.getClientRects().length) &&
@@ -93,7 +113,7 @@
   // ── Core sync function ───────────────────────────────────────────────────
   async function sync(automatic) {
     try {
-      const status = await api.runtime.sendMessage({ type: "status", provider });
+      const status = await sendMessage({ type: "status", provider });
 
       if (!status.connected) {
         setBadge("Continuum: not connected", "#8b1a1a");
@@ -131,7 +151,7 @@
 
       setBadge("Continuum: capturing…", "#1a3a5c");
 
-      const response = await api.runtime.sendMessage({
+      const response = await sendMessage({
         type: "capture",
         messages,
         title: document.title,
@@ -159,7 +179,7 @@
   // ── Periodic status update ───────────────────────────────────────────────
   async function updateStatus() {
     try {
-      const status = await api.runtime.sendMessage({ type: "status", provider });
+      const status = await sendMessage({ type: "status", provider });
       if (!status.connected) {
         setBadge("Continuum: not connected — check settings", "#8b1a1a");
       } else if (!status.active) {
@@ -169,7 +189,7 @@
         setBadge(`Continuum: ${status.auto ? "auto" : "manual"}${projectPart}`, "#18243a");
       }
     } catch {
-      setBadge("Continuum: extension error", "#8b1a1a");
+      setBadge("Continuum: not connected — check settings", "#8b1a1a");
     }
   }
 
