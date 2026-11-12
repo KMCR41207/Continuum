@@ -79,12 +79,16 @@ export function createApiServer(env: NodeJS.ProcessEnv = process.env) {
     const send = (status: number, data: unknown) => {
       res.writeHead(status).end(JSON.stringify(data));
     };
-    if (req.headers.origin && req.headers.origin !== origin) {
+    const allowedOrigins = (origin || "").split(",").map((o) => o.trim());
+    const requestOrigin = req.headers.origin || "";
+    const isBrowserExtension = requestOrigin.startsWith("chrome-extension://") || requestOrigin.startsWith("moz-extension://");
+    const isAllowedOrigin = allowedOrigins.includes(requestOrigin) || isBrowserExtension;
+    if (requestOrigin && !isAllowedOrigin) {
       send(403, { error: "Origin denied" });
       return;
     }
-    if (req.headers.origin) {
-      res.setHeader("Access-Control-Allow-Origin", origin!);
+    if (requestOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", requestOrigin);
       res.setHeader("Vary", "Origin");
     }
     if (req.method === "OPTIONS") {
