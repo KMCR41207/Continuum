@@ -50,22 +50,26 @@ async function flush() {
 }
 
 api.runtime.onMessage.addListener((message, sender, respond) => {
-  serial = serial.catch(() => {}).then(async () => {
-    // ── Status query from content script ──────────────────────────────────
-    if (message.type === "status") {
-      const config = await settings();
+  // Status queries are read-only — handle immediately outside the serial queue
+  // to avoid hanging if the queue is blocked or the SW just woke up.
+  if (message.type === "status") {
+    settings().then((config) => {
       const hasToken = Boolean(config.token && config.token.startsWith("ctm_"));
       const hasEndpoint = Boolean(config.endpoint);
-      return {
+      respond({
         active: config.consent && config[message.provider] && !config.paused,
         auto: config.auto,
         project: config.project || null,
         projectName: config.projectName || null,
         connected: hasToken && hasEndpoint,
-      };
-    }
+      });
+    }).catch(() => {
+      respond({ connected: false, active: false, auto: false, project: null, projectName: null });
+    });
+    return true;
+  }
 
-    // ── Capture request from content script ───────────────────────────────
+  serial = serial.catch(() => {}).then(async () => {
     if (message.type === "capture") {
       if (!sender.tab || !sender.url) return { error: "Invalid sender" };
 
