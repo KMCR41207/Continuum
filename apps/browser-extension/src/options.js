@@ -1,10 +1,12 @@
 import { api, settings, save } from "./lib/storage.js";
-import { testConnection, fetchProjects } from "./lib/api.js";
+import { testConnection, fetchProjects, isSupabaseEndpoint, assertPublicKey } from "./lib/api.js";
 
 const form = document.querySelector("#settings");
 const statusEl = document.querySelector("#status");
 const historyEl = document.querySelector("#history");
 const projectSelect = document.querySelector("#project-select");
+// Every checkbox preference saved to storage.
+const TOGGLES = ["consent", "chatgpt", "claude", "captureFiles", "auto", "paused"];
 
 function setStatus(text, type) {
   statusEl.textContent = text;
@@ -16,8 +18,9 @@ const config = await settings();
 
 form.elements["endpoint"].value = config.endpoint || "http://127.0.0.1:3101";
 form.elements["token"].value = config.token || "";
+form.elements["supabaseKey"].value = config.supabaseKey || "";
 
-for (const name of ["consent", "chatgpt", "claude", "auto", "paused"]) {
+for (const name of TOGGLES) {
   if (form.elements[name]) form.elements[name].checked = Boolean(config[name]);
 }
 
@@ -48,8 +51,9 @@ async function saveForm() {
   const data = {
     endpoint: (form.elements["endpoint"].value || "").trim(),
     token: (form.elements["token"].value || "").trim(),
+    supabaseKey: (form.elements["supabaseKey"].value || "").trim(),
   };
-  for (const name of ["consent", "chatgpt", "claude", "auto", "paused"]) {
+  for (const name of TOGGLES) {
     data[name] = form.elements[name]?.checked ?? false;
   }
   const selectedOpt = projectSelect.options[projectSelect.selectedIndex];
@@ -60,6 +64,7 @@ async function saveForm() {
     try {
       const u = new URL(data.endpoint);
       if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("Invalid protocol");
+      if (isSupabaseEndpoint(u)) assertPublicKey(data.supabaseKey);
       await api.permissions.request({ origins: [u.origin + "/*"] });
     } catch (err) {
       setStatus(`Invalid endpoint: ${err.message}`, "err");
@@ -80,7 +85,7 @@ form.addEventListener("submit", async (e) => {
 });
 
 // Auto-save checkboxes
-for (const name of ["consent", "chatgpt", "claude", "auto", "paused"]) {
+for (const name of TOGGLES) {
   form.elements[name]?.addEventListener("change", () => saveForm());
 }
 
@@ -92,6 +97,9 @@ form.elements["token"]?.addEventListener("input", () => {
     if (form.elements["token"].value.length > 10) saveForm();
   }, 800);
 });
+
+form.elements["supabaseKey"]?.addEventListener("change", () => saveForm());
+form.elements["endpoint"]?.addEventListener("change", () => saveForm());
 
 // Project change
 projectSelect.addEventListener("change", async () => {

@@ -248,8 +248,13 @@
       <div class="card-body">
         <div class="field">
           <label>Continuum server URL</label>
-          <input name="endpoint" type="text" placeholder="http://127.0.0.1:3101">
-          <p class="field-hint">Local Continuum API address. Run <code>pnpm api</code> to start it.</p>
+          <input name="endpoint" type="text" placeholder="https://your-project.supabase.co">
+          <p class="field-hint">Your Supabase project URL sends captures straight to Continuum, with no local server. A local API address such as <code>http://127.0.0.1:3101</code> also works while <code>pnpm api</code> runs.</p>
+        </div>
+        <div class="field">
+          <label>Supabase publishable key</label>
+          <input name="supabaseKey" type="text" autocomplete="off" placeholder="sb_publishable_… or anon key">
+          <p class="field-hint">Needed only with a Supabase URL. This key is public; never paste the service_role or secret key.</p>
         </div>
         <div class="field">
           <label>Capture token</label>
@@ -293,6 +298,13 @@
           <div class="toggle-info">
             <div class="toggle-title">Claude</div>
             <div class="toggle-desc">Capture conversations on claude.ai</div>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <input name="captureFiles" type="checkbox" id="captureFiles" checked>
+          <div class="toggle-info">
+            <label class="toggle-title" for="captureFiles">Capture files and images</label>
+            <div class="toggle-desc">Record the names and links of files and images attached to messages. File contents are never uploaded.</div>
           </div>
         </div>
         <div class="toggle-row">
