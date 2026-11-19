@@ -36,10 +36,30 @@ type Permissions = {
   writing: boolean;
   global_access: boolean;
   all_history: boolean;
+  /** null = no date limit; otherwise only conversations from the last N days. */
+  history_days: number | null;
   capture_paused: boolean;
   project_ids: string[];
   conversation_ids: string[];
 };
+export const historyOptions = [
+  ["none", "Selected conversations only"],
+  ["all", "All history"],
+  ["90", "Last 90 days"],
+  ["30", "Last 30 days"],
+  ["7", "Last 7 days"],
+  ["3", "Last 3 days"],
+] as const;
+/** Maps the "how far back" choice to the all_history / history_days pair stored by configure_connection. */
+export function historyScope(choice: string): Pick<Permissions, "all_history" | "history_days"> {
+  if (choice === "none") return { all_history: false, history_days: null };
+  if (choice === "all") return { all_history: true, history_days: null };
+  return { all_history: true, history_days: Number(choice) };
+}
+export function historyChoice(p: Pick<Permissions, "all_history" | "history_days">): string {
+  if (!p.all_history) return "none";
+  return p.history_days == null ? "all" : String(p.history_days);
+}
 type Connection = Permissions & {
   id: string;
   provider: string;
@@ -66,6 +86,7 @@ const defaults: Permissions = {
   writing: false,
   global_access: false,
   all_history: false,
+  history_days: null,
   capture_paused: false,
   project_ids: [],
   conversation_ids: [],
@@ -397,10 +418,6 @@ export function Connections() {
                     ],
                     ["capture_paused", "Pause capture"],
                     ["global_access", "Allow global context outside projects"],
-                    [
-                      "all_history",
-                      "Allow all conversations within the selected scope",
-                    ],
                   ] as const
                 ).map(([key, label]) => (
                   <label className="permission-check" key={key}>
@@ -418,6 +435,27 @@ export function Connections() {
                   </label>
                 ))}
               </fieldset>
+              <label>
+                How far back can this agent read?
+                <select
+                  aria-label="Conversation history range"
+                  value={historyChoice(permissions)}
+                  onChange={(e) =>
+                    setPermissions({ ...permissions, ...historyScope(e.target.value) })
+                  }
+                >
+                  {historyOptions.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <small className="small-text">
+                  Applies to conversations within the selected projects, and to
+                  memories sourced from them. Older conversations are hidden from
+                  this agent.
+                </small>
+              </label>
               <fieldset>
                 <legend>Project access</legend>
                 {projects.data.map((p) => (
