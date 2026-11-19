@@ -2,8 +2,219 @@
 
 > Historical Supabase implementation audit. The subsequent Python/SQLite/Chroma mode and its latest verification are recorded in [SELF-HOSTED-STATUS.md](docs/SELF-HOSTED-STATUS.md). Its integration preserves the legacy implementation and does not dual-write stores.
 
-Audit date: 1 November 2026. Last updated: 14 November 2026.
+Audit date: 1 November 2026. Last updated: 17 November 2026.
 Audit scope: local repository at Git HEAD plus all subsequent implementation, debugging, and QA work recorded below. This is an evidence-based, source-and-test audit; it makes no claim about a deployed environment.
+
+---
+
+## 27. Update — 19 November 2026: Live Supabase verification [Claude]
+
+DNS now resolves `*.supabase.co` correctly, so the live development project was tested with real calls (agent token; no secret key used).
+
+| Check | Result |
+|---|---|
+| Migrations 008–018 on the live project | **Applied.** `agent_request`, `agent_link_request`, `agent_workspace_request` answer; owner-only functions refuse the anon key with `permission denied` (correct) |
+| Token status, projects, workspace status | Work (workspace "Stackweb", 1 project, 3 agents) |
+| Per-chat capture (live writes) | **Pass.** Create → grow (+2 messages appended) → identical repeat (no-op) → stale snapshot ignored; exactly one conversation row; auto-routed to the project named by `provider_project` |
+| Extension upload code path (direct mode, publishable key) | **Pass**; a secret key is refused |
+| `continuum status` / `search` via CLI | **Pass** |
+| MCP server over stdio (19 tools, live) | **Pass**: authenticated calls, forbidden errors, bad arguments handled |
+
+Test data left in the live project (delete in Conversations): `[continuum-selftest] auto capture` and `[continuum-selftest] extension path`, plus their pending memories.
+
+**Not verified live:** website pages with a signed-in session (needs an interactive login); chat links between two agents and devices (need a second token / owner session; covered by local database tests); LLM extraction (no `EXTRACTION_*` model key configured and the owner opt-in needs a signed-in session); real chatgpt.com / claude.ai page capture (extension must be loaded by hand; browser automation is not connected). The leaked token is still the token in `.env.server` and still valid.
+
+### What is left to do
+
+Owner = you (needs your login, browser or accounts). Claude = can be done in a session once the blocker is cleared.
+
+**A. Security (do first)**
+
+| # | Task | Who | Detail |
+|---|---|---|---|
+| A1 | Revoke the leaked capture token (`ctm_c08c…`) | Owner | Continuum → Connections → open the connection → Revoke. It is in public git history (commit `fda69a7`) and still in `.env.server`. |
+| A2 | Create a new token and put it in `.env.server` | Owner | Never paste it in chat or commit it. |
+| A3 | Make the GitHub repo private | Owner | GitHub → Settings → General → Danger Zone → Change visibility. Do this before pushing. |
+| A4 | Optional: remove the old token from git history | Owner + Claude | Needs a force push (`git filter-repo`); only useful after A1. |
+
+**B. Get the work onto GitHub**
+
+| # | Task | Who | Detail |
+|---|---|---|---|
+| B1 | Open `C:\Users\ksair\continuum-release-validation` in Kiro | Owner | Not the OneDrive folder (its `.git` cannot be written). |
+| B2 | Run `pnpm install`, then push branch `release-ten-features-validation` | Owner | 29 local commits; `origin` is already set. Then open a PR into `main`. |
+| B3 | Move the working copy out of OneDrive (or remove the "deny Everyone" ACL) | Owner | Fixes locked `.git`, `build/`, `test-results/`, `artifacts/`. |
+
+**C. Live verification that still needs you**
+
+| # | Task | Who | Detail |
+|---|---|---|---|
+| C1 | Delete the two `[continuum-selftest]` conversations | Owner | Continuum → Conversations. Their pending memories go with them. |
+| C2 | Create a browser capture connection | Owner | Provider **Other**, Capture on, access to your projects; copy its token once. |
+| C3 | Load the extension | Owner | `chrome://extensions` → Developer mode → Load unpacked → `…\apps\browser-extension\build\chrome`; paste the token in its options. Firefox: `about:debugging` → Load Temporary Add-on → `build\firefox\manifest.json`. |
+| C4 | Test auto-capture on real chatgpt.com and claude.ai | Owner, then Claude | Send a few messages; confirm one conversation per chat in Continuum, named from the chat title, updating as it grows. If messages, titles or project names are missed, send Claude the page structure and the selectors in `content/capture.js` get tuned. |
+| C5 | Create Continuum projects with the same names as your ChatGPT/Claude projects | Owner | Automatic routing matches by name (ignoring case and punctuation). A fixed project is also selectable in the extension. |
+| C6 | Rename project "Coontinuum" if it is a typo | Owner | Routing matches by exact name. |
+| C7 | Sign in to the website and walk through Activity, Links, Devices, Connections, Conversations and hand-offs against live data | Owner, then Claude | Claude cannot enter your password. Report any broken page. |
+| C8 | Chat links and device revoke with two real agents | Owner | Needs a second token (another connection). Covered locally by database tests only. |
+
+**D. LLM memory extraction**
+
+| # | Task | Who | Detail |
+|---|---|---|---|
+| D1 | Choose a model provider and set `EXTRACTION_URL`, `EXTRACTION_MODEL`, `EXTRACTION_API_KEY` in `.env.server` | Owner | OpenAI-compatible HTTPS endpoint. Conversations are sent to it, so use one whose data policy you accept. |
+| D2 | Turn on "AI extraction" in Security and data | Owner | Owner-only switch. |
+| D3 | Run `pnpm worker` and confirm pending memories appear | Owner, then Claude | The worker also needs the Supabase service credentials it already requires. Verified locally with a test double only. |
+
+**E. Engineering follow-ups (Claude, no blocker)**
+
+| # | Task | Detail |
+|---|---|---|
+| E1 | Investigate the 16 public-site browser tests that fail on `HEAD` too | Animation, layout and auth-config tests; unrelated to this work. |
+| E2 | Self-hosted (Python/SQLite) mode is untested with the new features | Chat links, devices and activity exist only in the Supabase backend. |
+| E3 | Decide how Claude Code should receive the MCP token | `mcp on` registers the server without a token; run `continuum login` first, or set `CONTINUUM_TOKEN`. |
+| E4 | Optional: store the extension capture token in `chrome.storage.session` and prompt after browser restart | Hardening; current storage is local-only, not synced. |
+
+---
+
+## 26. Update — 18 November 2026: Private-development pass [Claude]
+
+- **Fixed:** with one conversation per chat, LLM extraction ran only on a chat's first snapshot. Migration 018 re-queues the conversation's extraction job when its message count changes (2-minute delay; status-only updates never re-queue; paused jobs stay paused).
+- **Verified locally:** capture → extraction job → real worker tick → pending memory hidden from agents → owner approval → another agent retrieves it with its source (`tests/unit/extraction-flow.test.ts`; the model is a test double).
+- `supabase/APPLY-008-018.sql` replaces the 008–017 bundle.
+- **Blocked:** live Supabase (this network resolves `*.supabase.co` to a non-Supabase address and resets TLS; no DB password or access token); real ChatGPT/Claude page testing (browser automation extension not connected; the extension must be loaded by hand).
+- **GitHub:** the repository is **public** (readable without login). Nothing was pushed. Make it private before pushing; the token leaked in history must be revoked regardless.
+
+---
+
+## 25. Update — 17 November 2026: Automatic per-chat capture and leak audit [Claude]
+
+### Automatic capture (migration 017 + extension)
+
+- One conversation per chat address (ChatGPT `/c/<id>`, Claude `/chat/<id>`): later captures append messages and refresh the title; an edited message replaces what follows; an older delayed snapshot is ignored. Pages without a chat address are not captured.
+- Chat names: page title without the provider suffix, or the first user message when the title is generic.
+- Project routing: a chat inside a ChatGPT/Claude project goes to the Continuum project with the same name (if the token may write there), otherwise to the extension's default project.
+- Direct mode: the extension calls Supabase `agent_request` with the public anon/publishable key and the capture token, so `pnpm api` does not need to run. Secret and service_role keys are refused at build time and at runtime. The build reads the project URL and anon key from the git-ignored `.env`.
+- Capture runs 2.5 s after the page settles and again when the tab is hidden or closed. Capture stays on by default; the off switch remains in extension settings.
+- `supabase/APPLY-008-017.sql` bundles migrations 008–017 for the Supabase SQL editor (verified on a 001–007 database).
+
+### Leak audit
+
+| Check | Result |
+|---|---|
+| Secrets in current tracked files | None |
+| `.env`, `.env.server`, `*.mcp_config.json`, `SESSION-SUMMARY-*`, `data/`, `CONTINUUM.local.md`, extension `build*/` | All git-ignored (verified with `git check-ignore`) |
+| Example env/config files | Placeholders only |
+| **Git history** | **A live capture token (`ctm_c08c…`) and the publishable key were committed in `claude_mcp_config.json` (commit `fda69a7`, 4 Nov) and are on `origin/main`. The same token is still in `.env.server`.** Revoke it in Connections and issue a new one. Rewriting the published history is a separate, deliberate decision (force push). |
+| Extension storage | `chrome.storage.local` only; no `storage.sync`, no external messaging, single fetch to the configured endpoint; token never written to history |
+| Server logs | No tokens, keys or conversation content are logged |
+| CLI | Token in `~/.continuum/token` (POSIX mode 0600; on Windows the user-profile ACL applies); MCP configs written by the CLI contain no token |
+
+---
+
+## 24. Update — 17 November 2026: Integration and release validation [Claude]
+
+### Results
+
+| Area | Status | Evidence |
+|---|---|---|
+| Unit + DB tests (Vitest, 20 files) | **238 passed, 0 failed** | `npx vitest run --configLoader runner --no-fsModuleCache` |
+| Extension tests | **22 passed, 0 failed** | `node --test tests/extension/*.test.mjs` |
+| TypeScript | Clean | `npx tsc --noEmit` |
+| Production build | Built | `vite build` (output outside OneDrive) |
+| Browser: new pages vs real PostgreSQL | **20 passed, 0 failed** (desktop + mobile) | `tests/connections-browser/features.spec.ts` + existing connections suite |
+| Browser: public site | 18 passed, 16 failed — **same failures as HEAD**, none introduced | Run outside OneDrive against HEAD and against this tree |
+| CLI → MCP stdio end-to-end | **6 passed** | `tests/unit/mcp-cli.test.ts` (real `continuum login` + `mcp serve` + MCP client) |
+| Security / authorization (server-side) | **10 passed** | `tests/unit/security.test.ts` plus chat-links, features-db |
+| Extension build | Built and verified (Chrome + Firefox) to a folder outside OneDrive | Sources byte-identical, manifests MV3, `node --check` clean |
+| Supabase migrations 011–016 on a live project | **BLOCKED** | No access token / DB password / service key; project host unreachable from this network |
+
+### Defects fixed in this pass
+
+| Defect | Fix |
+|---|---|
+| `continuum mcp on` wrote Claude Code config to `~/.claude/mcp.json`, which Claude Code never reads | Uses `claude mcp add-json continuum … -s user` / `claude mcp remove` (stored in `~/.claude.json`); replaces an older entry; prints instructions when `claude` is not installed |
+| Hand-off history page crashed: it read `package.messages`, but migration 006 deliberately stores hand-offs without message content | Page shows only stored fields (destination, note, time) |
+| New `.segmented` style collided with the public site's existing `segmented` control | Renamed to `.range-selector` |
+| Vite dev server hung: its cache folder could not be created inside the OneDrive folder | `CONTINUUM_VITE_CACHE_DIR` override (default unchanged) |
+| Extension build could not overwrite locked files in `build/` | `CONTINUUM_EXTENSION_OUT_DIR` override (default unchanged); `build-*/` git-ignored |
+| `docs/MEMORY-CONNECTIONS.md` described Codex's removed link design | Rewritten for code-based links, CLI and MCP registration |
+
+### Environment notes (this machine)
+
+- Files created earlier under Codex's sandbox account in `apps/browser-extension/build/`, `test-results/`, `artifacts/design/` and `node_modules/.vitest-cache/` cannot be overwritten or deleted, even outside the sandbox. Delete them manually or move the repository out of OneDrive.
+- `*.supabase.co` resolves to a non-Supabase address here and the TLS handshake is reset; `supabase.com` itself is reachable.
+
+---
+
+## 23. Update — 17 November 2026: Ten-feature build-out (Codex + Claude)
+
+### Who did what
+
+Tags used below: **[Codex]** = implemented by Codex, reviewed and corrected by Claude. **[Claude]** = implemented by Claude in this pass. **[Codex → fixed by Claude]** = Codex's version was wrong or partial and was rewritten.
+
+| Feature | Tag | Status |
+|---|---|---|
+| 1. LLM memory extraction | [Codex → fixed by Claude] | Worker payload bug fixed; LLM proposals now replace regex proposals |
+| 2. Provider export import (ChatGPT / Claude / Grok) | [Codex → fixed by Claude] | Parsers hardened; `/app/conversations` drag-and-drop with progress and summary |
+| 3. "Ask in…" hand-off menu and `/handoffs` subview | [Codex → fixed by Claude] | Menu was never mounted; now wired on cards and detail view |
+| 4. Activity dashboard (heatmap, agent bars, recent lookups) | [Claude] | New `get_activity_summary` migration and `/app/activity` page |
+| 5. Chat links (`/link` code relay) | [Codex → rewritten by Claude] | Codex's owner-paired version replaced with code-based create / join / post / read / close |
+| 6. File and image capture in the extension | [Codex] for the `options` toggle and `background.js` strip; [Claude] for `capture.js` attachment collection, `normalizer.js` pass-through, and migration `014` | Stored in `messages.attachments` |
+| 7. `continuum` CLI | [Codex] for session capture and link commands; [Claude] for everything else | status, mcp list/on/off/serve, login/logout, search, capture, help |
+| 8. "How far back" per connection | [Claude] | `history_days` migration, `/app/connections` dropdown |
+| 9. Devices page | [Claude] | Devices table, RPCs, `/app/devices`, CLI heartbeat |
+| 10. `CONTINUUM.md` project config | [Claude] | `server/projectConfig.ts`, template, CLI gates |
+| Supporting fix: API proxy routing and error codes | [Codex → fixed by Claude] | Only 5 operations were routed; every error returned 403 |
+
+### Features added in this pass
+
+- **Extraction:** the worker now sends a real JSON array. Malformed items are skipped without failing the job. Fenced JSON replies parse. Prompt size is bounded. Unreviewed regex proposals are replaced by LLM proposals for the same conversation (migration `202610310011_extraction_hardening.sql`).
+- **Import:** ChatGPT exports follow the selected branch and drop hidden messages. Claude content-block messages are read. Chats over 500 messages split into numbered parts. Duplicates within one file are skipped and counted.
+- **Hand-off UI:** "Ask in…" menu shows only providers with a usable connection. Preview modal, editable note, confirm, clipboard copy, and the spec's toast text. History subview at `/app/conversations/:id/handoffs`. Owner-only, matching `confirm_handoff`.
+- **Activity:** `get_activity_summary(p_workspace, p_days)` returns daily counts (UTC), per-agent totals, the 20 latest lookups and totals. CSS-only 12-week heatmap, bars and feed. Range selector 30 / 60 / 90 days. The old change log sits collapsed below.
+- **Chat links:** `create_link` returns a code (only its SHA-256 hash is stored). `join_link` supports private (2 members), approval (owner approves) and public (up to 20) types. Expiry is 24h unjoined and 30 days once joined. Posts are limited to 120 per connection per hour. Members only see their own links through RLS. Agents reach links through `agent_link_request`. Owner dashboard at `/app/links` has member count, last message, copy join code (rotates the code), close and approve/decline.
+- **File capture:** the extension stores http(s) URLs and names only. `data:` and `blob:` URLs are dropped. Max 20 attachments per message. The "Capture files and images" toggle strips references before queueing and before upload, including items already queued. `get_conversation` returns attachments.
+- **CLI:** `status`, `mcp list|on|off|serve`, `login`, `logout`, `search`, `capture`, `link`, `projects`, `export`, `help`, plus `--json`. Token is read from `CONTINUUM_TOKEN` or `~/.continuum/token` (mode 0600). `mcp on` backs up the original config once, writes JSON or TOML, and skips agents that are not installed. The `continuum` bin and `pnpm continuum` script are in `package.json`.
+- **History scope:** `history_days` (1–3650 or null) on connections. Enforced in `connection_conversation`, so it also limits hand-offs and memories sourced from older conversations.
+- **Devices:** `register_device`, `device_heartbeat`, `list_devices`, `revoke_device` (owner only, optional token revocation). CLI registers on login and checks in on each command. A revoked device's CLI deletes its token.
+- **CONTINUUM.md:** `save: false` stops capture, `project:` assigns captures by name, `exclude:` skips paths (bare names match at any depth, globs supported). `CONTINUUM.local.md` overrides keys. Unknown keys are rejected. Walks up to the `.git` root.
+
+### Bugs found and fixed during review
+
+| Area | Bug | Fix |
+|---|---|---|
+| Extraction | Worker sent `JSON.stringify(proposals)`, stored as a jsonb scalar; every extraction job failed. Codex's test asserted the bug. | Send the array; test corrected |
+| Chat links | Codex's relay had no join codes, expiry, limits or close. | Rewritten to spec |
+| Hand-off UI | Component built but mounted nowhere; no subview route | Wired and routed |
+| API proxy | Only 5 agent operations routed; all errors → 403 | Shared `agentRpc()` routing; error codes map to 401/403/409/429/400 |
+| `server/gateway.ts` | Parameter property in `AgentError` broke Node type-stripping; MCP server failed to start | Plain field; regression test added |
+| `vitest.config` / OneDrive | Vitest cache files locked by OneDrive, so `pnpm test` fails here | Run with `--no-fsModuleCache` (see below) |
+| `chat-links` tests | Error code mapping and rate-limit test ordering | Fixed in SQL and test |
+
+### Verification (run on 17 Nov 2026)
+
+| Suite | Command | Result |
+|---|---|---|
+| Unit tests (Vitest, 18 files) | `npx vitest run --configLoader runner --no-fsModuleCache` | **220 passed, 0 failed** |
+| Extension tests (Node --test) | `node --test tests/extension/*.test.mjs` | **22 passed, 0 failed** |
+| Typecheck | `npx tsc --noEmit` | Clean |
+| Production build | `vite build` (to scratch folder) | Built |
+
+New DB tests run against PGlite with all migrations applied in order. New tests: `chat-links`, `extraction-db` (replacement), `features-db` (history scope, file capture, activity, devices, hand-off, workspace status), `importParsers`, `projectConfig`, `cli`, `ui-logic`, `node-runtime`.
+
+### Not yet verified
+
+- The new pages (`/app/activity`, `/app/links`, `/app/devices`, hand-off menu) have not been opened in a browser. They need a running Supabase project and a signed-in owner.
+- Migrations `011`–`016` have only been applied to PGlite, not to a live Supabase project.
+- The extension build (`pnpm extension:build`) has not been re-run; the `build/` folder is stale.
+- Nothing is committed to git yet.
+
+### Operational notes
+
+- Run tests with `npx vitest run --configLoader runner --no-fsModuleCache` while the repo sits in OneDrive.
+- Migration numbers `011`–`016` follow Codex's `008`–`010`. All new migrations are additive.
+- Claude Code's MCP config location: resolved in section 24 (`claude mcp add-json -s user`, stored in `~/.claude.json`).
 
 ---
 
