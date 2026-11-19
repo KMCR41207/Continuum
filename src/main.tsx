@@ -6,6 +6,7 @@ import { AuthProvider } from "./lib/AuthContext";
 import { brand } from "./config/brand";
 import "./styles/tokens.css";
 import "./styles/site.css";
+import "./styles/features.css";
 document.title = brand.metadata.title;
 document.documentElement.style.setProperty(
   "--color-accent",

@@ -24,7 +24,10 @@ const Conversations = lazy(() => import("./pages/app/Conversations").then((m) =>
 const Projects     = lazy(() => import("./pages/app/Projects").then((m) => ({ default: m.Projects })));
 const LocalFiles   = lazy(() => import("./pages/app/LocalFiles").then((m) => ({ default: m.LocalFiles })));
 const Connections  = lazy(() => import("./pages/app/Connections").then((m) => ({ default: m.Connections })));
-const ActivityPage = lazy(() => import("./pages/app/OtherPages").then((m) => ({ default: m.ActivityPage })));
+const Links = lazy(() => import("./pages/app/Links").then((m) => ({ default: m.Links })));
+const ConversationHandoffsPage = lazy(() => import("./pages/app/ConversationHandoff").then((m) => ({ default: m.ConversationHandoffsPage })));
+const DevicesPage = lazy(() => import("./pages/app/Devices").then((m) => ({ default: m.DevicesPage })));
+const ActivityPage = lazy(() => import("./pages/app/Activity").then((m) => ({ default: m.ActivityPage })));
 const SettingsPage = lazy(() => import("./pages/app/OtherPages").then((m) => ({ default: m.SettingsPage })));
 const OnboardingPage = lazy(() => import("./pages/app/Onboarding").then((m) => ({ default: m.OnboardingPage })));
 const UsagePage    = lazy(() => import("./pages/app/ProductPages").then((m) => ({ default: m.UsagePage })));
@@ -68,9 +71,12 @@ export function App() {
           <Route index element={<Overview />} />
           <Route path="memories" element={<Memories />} />
           <Route path="conversations" element={<Conversations />} />
+          <Route path="conversations/:id/handoffs" element={<ConversationHandoffsPage />} />
+          <Route path="devices" element={<DevicesPage />} />
           <Route path="projects" element={<Projects />} />
           {selfHosted && <Route path="files" element={<LocalFiles />} />}
           <Route path="connections" element={<Connections />} />
+          <Route path="links" element={<Links />} />
           <Route path="agents" element={<Connections />} />
           <Route path="activity" element={<ActivityPage />} />
           <Route path="settings" element={<SettingsPage />} />
