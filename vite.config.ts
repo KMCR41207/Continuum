@@ -4,5 +4,10 @@ import {isPrivilegedKey} from './src/lib/publicKey.ts';
 export default defineConfig(({mode})=>{
   const env=loadEnv(mode,process.cwd(),'VITE_');
   if(Object.entries(env).some(([name,value])=>/SERVICE_ROLE|SECRET|PRIVATE_KEY/.test(name)||isPrivilegedKey(value)))throw new Error('Privileged credentials must never appear in VITE_ variables. Remove them before building.');
-  return {plugins:[react()],server:{port:5173}};
+  return {
+    // Override when the repository folder cannot host the cache (e.g. a synced OneDrive folder).
+    cacheDir: process.env.CONTINUUM_VITE_CACHE_DIR || ".vite-cache",
+    plugins: [react()],
+    server: { port: 5173 },
+  };
 });
