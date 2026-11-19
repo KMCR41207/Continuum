@@ -1,16 +1,23 @@
+import build from "./build-config.js";
+
 export const api = globalThis.browser || globalThis.chrome;
 
 export const defaults = {
-  // Auth — token only, no Supabase credentials in browser extension
+  // Auth — the scoped capture token (ctm_…) authorizes every request.
   token: "",
-  // Local Continuum API endpoint (never expose Supabase keys in extension)
-  endpoint: "http://127.0.0.1:3101",
+  // Supabase project URL (direct, no local server) when the build provides one;
+  // otherwise the local Continuum API.
+  endpoint: build.supabaseUrl || "http://127.0.0.1:3101",
+  // Publishable/anon key for direct mode. Public by design; never a secret key.
+  supabaseKey: build.supabaseKey || "",
   // Capture settings
   consent: true,
   chatgpt: true,
   claude: true,
   paused: false,
   auto: true,
+  // Record references (name + URL) to files and images in captured messages
+  captureFiles: true,
   // Project
   project: "",
   projectName: "",
