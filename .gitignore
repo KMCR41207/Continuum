@@ -1,4 +1,5 @@
 node_modules/
+.vite-cache/
 dist/
 .env
 .env.*
@@ -12,6 +13,7 @@ __pycache__/
 data/
 *.pyc
 apps/browser-extension/build/
+apps/browser-extension/build-*/
 package-lock.json
 
 # MCP config files may contain real tokens — keep only examples in git
@@ -19,6 +21,9 @@ claude_mcp_config.json
 kiro_mcp_config.json
 *.mcp_config.json
 *_mcp_config.local.json
+
+# Personal Continuum capture overrides
+CONTINUUM.local.md
 
 # Session summaries with tokens/keys
 SESSION-SUMMARY-*.md
