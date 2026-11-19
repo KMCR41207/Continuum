@@ -7,10 +7,24 @@ import { Empty, Modal, Notice } from "../../components/ui";
 import { db } from "../../lib/supabase";
 import { importConversation, errorMessage, remove } from "../../lib/api";
 import type { Conversation, Project } from "../../lib/types";
+import { parseExport } from "../../lib/importParsers";
+import type { ConversationInput } from "../../lib/memory";
+import { useAuth } from "../../lib/AuthContext";
+import {
+  ConversationHandoff,
+  HandoffMenu,
+  type HandoffConnection,
+} from "./ConversationHandoff";
 export function Conversations() {
   const records = useRecords<Conversation>("conversations");
   const projects = useRecords<Project>("projects");
+  const connections = useRecords<HandoffConnection>("agent_connections");
   const { workspace } = useWorkspace();
+  const { session } = useAuth();
+  // confirm_handoff is owner-only (migration 010), so only owners get the menu.
+  const owner = workspace.owner_id === session?.user.id;
+  const [handoff, setHandoff] = useState<{ conversation: Conversation; connection: HandoffConnection } | null>(null);
+  const [fileDuplicates, setFileDuplicates] = useState(0);
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [importing, setImporting] = useState(false);
@@ -20,6 +34,28 @@ export function Conversations() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [batch, setBatch] = useState<ConversationInput[] | null>(null);
+  const [batchName, setBatchName] = useState("");
+  const [progress, setProgress] = useState("");
+  const [batchErrors, setBatchErrors] = useState<string[]>([]);
+  const [batchSummary, setBatchSummary] = useState("");
+  async function loadExport(file: File | undefined) {
+    if (!file) return;
+    setError("");
+    setBatch(null);
+    setBatchSummary("");
+    setBatchErrors([]);
+    try {
+      if (!file.name.toLowerCase().endsWith(".json")) throw new Error("Choose a JSON export file.");
+      let parsed: unknown;
+      try { parsed = JSON.parse(await file.text()); } catch { throw new Error("The file is not valid JSON."); }
+      const { conversations, duplicates } = parseExport(parsed);
+      if (!conversations.length) throw new Error("No conversations with text messages were found in this export.");
+      setBatch(conversations);
+      setFileDuplicates(duplicates);
+      setBatchName(file.name);
+    } catch (e) { setError(errorMessage(e)); }
+  }
   const selected = records.data.find((c) => c.id === params.get("open"));
   const shown = records.data.filter((c) =>
     (c.title + " " + c.platform).toLowerCase().includes(query.toLowerCase()),
@@ -62,7 +98,8 @@ export function Conversations() {
       ) : shown.length ? (
         <div className="conversation-list">
           {shown.map((c) => (
-            <button key={c.id} onClick={() => setParams({ open: c.id })}>
+            <div className="conversation-row" key={c.id}>
+            <button onClick={() => setParams({ open: c.id })}>
               <span className="conversation-platform">
                 {c.platform.slice(0, 2)}
               </span>
@@ -82,6 +119,14 @@ export function Conversations() {
               </span>
               <span>↗</span>
             </button>
+            {owner && (
+              <HandoffMenu
+                conversation={c}
+                connections={connections.data}
+                onPick={(connection) => { setNotice(""); setHandoff({ conversation: c, connection }); }}
+              />
+            )}
+            </div>
           ))}
         </div>
       ) : (
@@ -105,12 +150,22 @@ export function Conversations() {
           conversation={selected}
           onClose={() => setParams({})}
           reload={records.reload}
+          handoffs={owner ? connections.data : null}
+          onHandoff={(connection) => { setParams({}); setNotice(""); setHandoff({ conversation: selected, connection }); }}
+        />
+      )}
+      {handoff && (
+        <ConversationHandoff
+          conversation={handoff.conversation}
+          connection={handoff.connection}
+          onClose={() => setHandoff(null)}
+          onShared={(message) => setNotice(message)}
         />
       )}{" "}
       {importing && (
         <Modal
           title="Import a conversation"
-          onClose={() => setImporting(false)}
+          onClose={() => { if (!busy) setImporting(false); }}
         >
           <form
             className="modal-body"
@@ -119,6 +174,23 @@ export function Conversations() {
               setBusy(true);
               setError("");
               try {
+                if (batch) {
+                  let imported = 0, duplicates = 0;
+                  const failures: string[] = [];
+                  for (let i = 0; i < batch.length; i++) {
+                    setProgress(`${imported} of ${batch.length} imported · processing ${i + 1}…`);
+                    try {
+                      const result = await importConversation(workspace.id, project || null, JSON.stringify(batch[i]));
+                      if (result.duplicate) duplicates++; else imported++;
+                    } catch (e) { failures.push(`${batch[i].title}: ${errorMessage(e)}`); }
+                  }
+                  setBatchSummary(`${imported} of ${batch.length} imported · ${duplicates + fileDuplicates} duplicates skipped${fileDuplicates ? ` (${fileDuplicates} repeated in the file)` : ""} · ${failures.length} errors`);
+                  setBatchErrors(failures);
+                  setBatch(null);
+                  setProgress("");
+                  await records.reload();
+                  return;
+                }
                 if (queued) {
                   const input = JSON.parse(raw);
                   const job = await db().rpc("enqueue_import", {
@@ -155,10 +227,18 @@ export function Conversations() {
             }}
           >
             <p>
-              Paste a normalized conversation. Original messages are saved;
-              direct durable statements become proposals for your review.
+              Import a provider export or paste a normalized conversation. Memories remain subject to review.
             </p>
             {error && <Notice error>{error}</Notice>}
+            {batchSummary && <Notice>{batchSummary}</Notice>}
+            {batchErrors.length > 0 && <details><summary>Show import errors ({batchErrors.length})</summary><ul>{batchErrors.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
+            <div className="app-section" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (!busy) void loadExport(e.dataTransfer.files[0]); }}>
+              <label>Drop a ChatGPT, Claude, or Grok export JSON file here, or choose a file
+                <input type="file" accept=".json,application/json" disabled={busy} onChange={(e) => { void loadExport(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              {batch && <p>{batchName}: {batch.length} conversations ready. <button type="button" disabled={busy} onClick={() => setBatch(null)}>Remove file</button></p>}
+            </div>
+            {progress && <p role="status" aria-live="polite">{progress}</p>}
             <label>
               Project
               <select
@@ -176,7 +256,7 @@ export function Conversations() {
             <label>
               Conversation JSON
               <textarea
-                required
+                required={!batch}
                 rows={10}
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
@@ -190,6 +270,7 @@ export function Conversations() {
               <input
                 type="checkbox"
                 checked={queued}
+                disabled={!!batch || busy}
                 onChange={(e) => setQueued(e.target.checked)}
               />
               Queue for background processing (requires a running worker)
@@ -199,12 +280,11 @@ export function Conversations() {
               process this conversation.
             </label>
             <p className="small-text">
-              Every candidate requires approval. This initial extractor uses
-              conservative rules, not an external AI model.{" "}
+              Every candidate requires approval. AI extraction is available when configured and enabled in Security.{" "}
               <Link to="/docs#import">See the format</Link>.
             </p>
             <button className="button" disabled={busy}>
-              {busy ? "Importing…" : "Import and propose memories"}
+              {busy ? "Importing…" : batch ? `Import ${batch.length} conversations` : "Import and propose memories"}
             </button>
           </form>
         </Modal>
@@ -216,10 +296,14 @@ function ConversationDetail({
   conversation: c,
   onClose,
   reload,
+  handoffs,
+  onHandoff,
 }: {
   conversation: Conversation;
   onClose: () => void;
   reload: () => Promise<void>;
+  handoffs: HandoffConnection[] | null;
+  onHandoff: (connection: HandoffConnection) => void;
 }) {
   const [messages, setMessages] = useState<
     {
@@ -227,6 +311,7 @@ function ConversationDetail({
       role: string;
       content: string;
       source_metadata: Record<string, unknown>;
+      attachments?: { type: string; name: string; url: string }[];
     }[]
   >([]);
   const [error, setError] = useState("");
@@ -246,7 +331,7 @@ function ConversationDetail({
       });
     db()
       .from("messages")
-      .select("id,role,content,source_metadata")
+      .select("id,role,content,source_metadata,attachments")
       .eq("conversation_id", c.id)
       .order("position")
       .then(({ data, error }) => {
@@ -259,8 +344,10 @@ function ConversationDetail({
     <Modal title={c.title} onClose={onClose}>
       <div className="modal-body">
         <p className="small-text">
-          {c.platform} · {new Date(c.created_at).toLocaleString()}
+          {c.platform} · {new Date(c.created_at).toLocaleString()} ·{" "}
+          <Link to={`/app/conversations/${c.id}/handoffs`}>Hand-off history</Link>
         </p>
+        {handoffs && <HandoffMenu conversation={c} connections={handoffs} onPick={onHandoff} />}
         {error && <Notice error>{error}</Notice>}
         {c.source_metadata && Object.keys(c.source_metadata).length > 0 && (
           <details>
@@ -275,6 +362,18 @@ function ConversationDetail({
             <article className={`source-message ${m.role}`} key={m.id}>
               <span className="eyebrow">{m.role}</span>
               <p>{m.content}</p>
+              {m.attachments && m.attachments.length > 0 && (
+                <ul className="small-text" aria-label="Attachments">
+                  {m.attachments.map((a, i) => (
+                    <li key={i}>
+                      {a.type === "image" ? "Image" : "File"}:{" "}
+                      {/^https?:\/\//.test(a.url) ? (
+                        <a href={a.url} target="_blank" rel="noopener noreferrer">{a.name}</a>
+                      ) : a.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {m.source_metadata &&
                 Object.keys(m.source_metadata).length > 0 && (
                   <details>
