@@ -5,6 +5,43 @@ export type AgentCall = (
   args?: Record<string, unknown>,
 ) => Promise<unknown>;
 
+/** Scoped-token operations and the PostgreSQL entry point that serves each. */
+export const coreOperations = [
+  "status", "test_connection", "disconnect", "capture_conversation", "save_memory", "save_project_note",
+  "update_memory", "search_memory", "recall_memory", "get_recent_context", "export_memories",
+  "search_conversations", "get_conversation", "list_projects", "get_project_context",
+] as const;
+export const linkOperations = ["create_link", "join_link", "post_to_link", "read_link", "close_link", "list_links"] as const;
+export const workspaceOperations = ["workspace_status", "list_connections", "register_device", "device_heartbeat"] as const;
+
+export function agentRpc(operation: string): string | null {
+  if (operation === "get_handoffs") return "get_agent_handoffs";
+  if ((linkOperations as readonly string[]).includes(operation)) return "agent_link_request";
+  if ((workspaceOperations as readonly string[]).includes(operation)) return "agent_workspace_request";
+  if ((coreOperations as readonly string[]).includes(operation)) return "agent_request";
+  return null;
+}
+
+/** HTTP status for an `{error, code}` result returned by an agent entry point. */
+export function agentErrorStatus(code: unknown): number {
+  switch (code) {
+    case "unauthorized": return 401;
+    case "forbidden": case "device_revoked": return 403;
+    case "conflict": case "link_unavailable": return 409;
+    case "rate_limited": return 429;
+    default: return 400;
+  }
+}
+
+export class AgentError extends Error {
+  // Plain field (no parameter property): Node runs this file with type stripping only.
+  readonly code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 /** Uses the publishable key, never service-role access. PostgreSQL checks the scoped token. */
 export function createGateway(env: NodeJS.ProcessEnv = process.env): AgentCall {
   if (env.CONTINUUM_API_URL) {
@@ -37,11 +74,14 @@ export function createGateway(env: NodeJS.ProcessEnv = process.env): AgentCall {
           signal: AbortSignal.timeout(30000),
         },
       );
+      const result = await response.json().catch(() => null);
+      if (result && typeof result === "object" && "error" in result)
+        throw new AgentError(`${result.code || "request_denied"}: ${result.error}`, String(result.code || "request_denied"));
       if (!response.ok)
         throw new Error(
           `Local memory request denied or unavailable (${response.status})`,
         );
-      return response.json();
+      return result;
     };
   }
   const base = env.CONTINUUM_SUPABASE_URL;
@@ -95,14 +135,21 @@ export function createGateway(env: NodeJS.ProcessEnv = process.env): AgentCall {
       );
     const result = await response.json();
     if (result && typeof result === "object" && "error" in result)
-      throw new Error(`${result.code}: ${result.error}`);
+      throw new AgentError(`${result.code}: ${result.error}`, String(result.code));
     return result;
   };
   return async (operation, args = {}) => {
-    if (operation === "get_handoffs")
-      return send("get_agent_handoffs", {
+    const rpc = agentRpc(operation);
+    if (rpc === "get_agent_handoffs")
+      return send(rpc, {
         p_token: token,
         p_project: args.project_id || null,
+      });
+    if (rpc === "agent_link_request" || rpc === "agent_workspace_request")
+      return send(rpc, {
+        p_token: token,
+        p_operation: operation,
+        p_args: args,
       });
     const lexical = await send("agent_request", {
       p_token: token,
