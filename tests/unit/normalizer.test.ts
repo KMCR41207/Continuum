@@ -7,7 +7,78 @@ import { describe, it, expect } from "vitest";
 import {
   normalizedConversation,
   contentHash,
+  cleanAttachments,
+  withoutAttachments,
+  chatPath,
+  chatTitle,
+  providerProjectFromUrl,
 } from "../../apps/browser-extension/src/lib/normalizer.js";
+
+describe("automatic capture: one conversation per chat", () => {
+  it("identifies saved chats by their address and ignores unsaved pages", () => {
+    expect(chatPath("chatgpt", "https://chatgpt.com/c/6812-ab?model=x")).toBe("/c/6812-ab");
+    expect(chatPath("chatgpt", "https://chatgpt.com/g/g-p-1a2b-atlas/c/6812-ab")).toBe("/g/g-p-1a2b-atlas/c/6812-ab");
+    expect(chatPath("chatgpt", "https://chatgpt.com/")).toBeNull();
+    expect(chatPath("chatgpt", "https://chatgpt.com/g/g-p-1a2b-atlas/project")).toBeNull();
+    expect(chatPath("claude", "https://claude.ai/chat/0b1c-22/")).toBe("/chat/0b1c-22");
+    expect(chatPath("claude", "https://claude.ai/new")).toBeNull();
+    expect(() => normalizedConversation("claude", [{ role: "user", content: "hi" }], "T", "https://claude.ai/new")).toThrow(/no chat ID/);
+  });
+
+  it("names chats from the page title, or the first message when the title is generic", () => {
+    const messages = [{ role: "assistant", content: "Hi" }, { role: "user", content: "  Plan   the Atlas\nlaunch timeline please " }];
+    expect(chatTitle("Launch timeline - ChatGPT", messages)).toBe("Launch timeline");
+    expect(chatTitle("Pricing ideas | Claude", messages)).toBe("Pricing ideas");
+    expect(chatTitle("ChatGPT", messages)).toBe("Plan the Atlas launch timeline please");
+    expect(chatTitle("New chat - Claude", messages)).toBe("Plan the Atlas launch timeline please");
+    expect(chatTitle("", [])).toBe("Captured conversation");
+  });
+
+  it("reads the ChatGPT project from the address and passes Claude's project through", () => {
+    expect(providerProjectFromUrl("chatgpt", "https://chatgpt.com/g/g-p-67ab12-atlas-launch/c/1")).toBe("atlas launch");
+    expect(providerProjectFromUrl("chatgpt", "https://chatgpt.com/c/1")).toBe("");
+    const claude = normalizedConversation("claude", [{ role: "user", content: "x" }], "T", "https://claude.ai/chat/9", { providerProject: "  Atlas   Launch " });
+    expect(claude.metadata).toMatchObject({ url: "https://claude.ai/chat/9", provider_project: "Atlas Launch" });
+    expect("provider_project" in normalizedConversation("chatgpt", [{ role: "user", content: "x" }], "T", "https://chatgpt.com/c/1").metadata).toBe(false);
+  });
+});
+
+describe("attachments", () => {
+  const url = "https://claude.ai/chat/abc";
+  it("preserves attachment references on messages", () => {
+    const result = normalizedConversation("claude", [
+      { role: "user", content: "See attached", attachments: [{ type: "image", name: " chart.png ", url: "https://cdn.example.com/chart.png" }] },
+      { role: "assistant", content: "Got it" },
+    ], "T", url);
+    expect(result.messages[0].attachments).toEqual([{ type: "image", name: "chart.png", url: "https://cdn.example.com/chart.png" }]);
+    expect("attachments" in result.messages[1]).toBe(false);
+  });
+  it("sanitizes untrusted attachment data from the page", () => {
+    expect(cleanAttachments([
+      { type: "image", name: "x", url: "blob:https://claude.ai/123" },
+      { type: "script", name: "y", url: "javascript:alert(1)" },
+      { type: "file", name: "", url: "" },
+      "nonsense",
+      { type: "file", name: "a".repeat(300), url: "https://e.com/" + "b".repeat(3000) },
+    ])).toEqual([
+      { type: "image", name: "x", url: "" },
+      { type: "file", name: "y", url: "" },
+      { type: "file", name: "a".repeat(200), url: "" },
+    ]);
+    expect(cleanAttachments(Array.from({ length: 30 }, (_, i) => ({ type: "file", name: `f${i}`, url: "" })))).toHaveLength(20);
+    expect(cleanAttachments("not an array")).toEqual([]);
+  });
+  it("keeps attachment-only messages with a descriptive placeholder", () => {
+    const result = normalizedConversation("chatgpt", [
+      { role: "user", content: "  ", attachments: [{ type: "file", name: "report.pdf", url: "" }] },
+    ], "T", "https://chatgpt.com/c/1");
+    expect(result.messages[0].content).toBe("[Attached: report.pdf]");
+  });
+  it("withoutAttachments removes references and leaves other fields", () => {
+    expect(withoutAttachments([{ role: "user", content: "x", attachments: [{ type: "file", name: "a", url: "" }] }]))
+      .toEqual([{ role: "user", content: "x" }]);
+  });
+});
 
 // ── normalizedConversation ────────────────────────────────────────────────────
 
@@ -182,14 +253,14 @@ describe("normalizedConversation — metadata sanitization", () => {
     expect(result.title).toHaveLength(200);
   });
 
-  it("uses fallback title when title is empty", () => {
+  it("names an untitled chat after its first user message", () => {
     const result = normalizedConversation(
       "chatgpt",
       [{ role: "user", content: "Hello" }],
       "",
       "https://chatgpt.com/c/test",
     );
-    expect(result.title).toBe("Captured conversation");
+    expect(result.title).toBe("Hello");
   });
 
   it("includes captured_at timestamp in metadata", () => {
