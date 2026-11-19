@@ -121,3 +121,41 @@ Current verification: `pnpm test` — 44 passed; `pnpm test:e2e` — 12 passed; 
 The core authorized import → reviewed source-linked memory → independently scoped MCP retrieval works locally. This report does not claim that every requested provider or production service is complete.
 
 SDK reference checked during implementation: [official TypeScript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk). Installed server/client version: 2.4.0, pinned by `pnpm-lock.yaml`.
+
+## Chat links
+
+Apply migrations through `202610310013_chat_links_codes.sql` (it replaces the owner-paired prototype from `009`). Links are started by agents, not the dashboard:
+
+1. In one agent, the user types `/link`. The agent calls `create_link` and shows the returned join code. Only a SHA-256 hash of the code is stored.
+2. In another agent in the same workspace, the user types `/link <code>`. That agent calls `join_link`.
+3. Members exchange messages with `post_to_link` (max 4000 characters, 120 posts per connection per hour) and poll with `read_link` (pass the previous `next_since`). `close_link` is available to the link's creator.
+
+Types: `private` (two members), `approval` (the workspace owner approves each joiner in **Chat links**), `public` (up to 20 members). A link nobody joins expires after 24 hours; once a second member joins it lives 30 days. Members only see messages posted after they joined. Creating, joining and posting need writing permission; reading needs retrieval permission. Relay messages are untrusted text and never become memories.
+
+The owner's **Chat links** page (`/app/links`) lists open links with member count and last message time, shows messages, approves or declines pending members, closes links, and issues a fresh join code (**Copy join code** rotates the code; the previous one stops working).
+
+CLI equivalents, using the token in `~/.continuum/token` or `CONTINUUM_TOKEN`:
+
+```text
+pnpm continuum link create [private|approval|public] [name]
+pnpm continuum link join <code>
+pnpm continuum link post <link UUID> "Message to the other agents"
+pnpm continuum link read <link UUID> [since ISO time]
+pnpm continuum link close <link UUID>
+pnpm continuum link list
+```
+
+## Coding-agent session capture
+
+Create a connection with **Capture** permission for the matching provider and project, then set its scoped token and Supabase endpoint in your local agent environment. From the project directory, run one of:
+
+```text
+pnpm cli capture claude-code path/to/transcript.jsonl PROJECT_UUID --dry-run
+pnpm cli capture claude-code path/to/transcript.jsonl PROJECT_UUID
+pnpm cli capture codex path/to/rollout.jsonl PROJECT_UUID
+pnpm cli capture cursor path/to/export.md PROJECT_UUID
+```
+
+The dry run shows titles and counts without contacting Continuum. Claude Code and Codex transcripts use JSONL; Cursor chats use the Markdown export from its history panel. The parser imports user and assistant text only and drops tool calls, tool output, reasoning blocks, and other roles. Long sessions split into bounded parts. Re-running an unchanged file returns a duplicate from the database rather than storing the same messages twice. Captured conversations enter the normal pending-memory review flow. This is explicit file capture; no background file scanning is enabled.
+
+`pnpm continuum mcp serve` starts the same scoped stdio MCP service as `pnpm mcp`, reading the token from `~/.continuum/token`. `pnpm continuum mcp on --agents claude,cursor,codex` registers it: Claude Code through `claude mcp add-json continuum … -s user` (stored in `~/.claude.json`), Cursor in `~/.cursor/mcp.json`, Codex in `~/.codex/config.toml`. `mcp off` removes it. A `CONTINUUM.md` in the repository can disable capture (`save: false`), assign a project by name, or exclude paths; see `CONTINUUM.md.example`.
