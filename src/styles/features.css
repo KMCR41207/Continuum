@@ -1,0 +1,205 @@
+/* ── Features CSS ─────────────────────────────────────────────────────────────
+   Styles for Activity, Links, Devices, Connections history scope, and
+   Conversation hand-off UI added in the November 2026 build-out.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── Range selector (replaces old .segmented to avoid collision) ─────────── */
+.range-selector {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.range-selector button {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s, color 0.15s;
+}
+.range-selector button.active,
+.range-selector button[aria-pressed="true"] {
+  background: var(--color-accent, #4f8ef7);
+  color: #fff;
+  border-color: var(--color-accent, #4f8ef7);
+}
+
+/* ── Activity heatmap ─────────────────────────────────────────────────────── */
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+  margin-block: 1rem;
+}
+.heatmap-week {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.heatmap-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--color-border, #222);
+  transition: background 0.1s;
+}
+.heatmap-cell[data-level="1"] { background: #1a4a1a; }
+.heatmap-cell[data-level="2"] { background: #2d6e2d; }
+.heatmap-cell[data-level="3"] { background: #3d9e3d; }
+.heatmap-cell[data-level="4"] { background: #4fc44f; }
+
+/* ── Activity agent bars ─────────────────────────────────────────────────── */
+.activity-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.activity-bar-row {
+  display: grid;
+  grid-template-columns: 10rem 1fr 3rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+.activity-bar-track {
+  height: 8px;
+  background: var(--color-border, #222);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.activity-bar-fill {
+  height: 100%;
+  background: var(--color-accent, #4f8ef7);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.activity-count {
+  font-size: 0.8rem;
+  text-align: right;
+  color: var(--color-muted, #888);
+}
+
+/* ── Activity feed ───────────────────────────────────────────────────────── */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-block: 0.75rem;
+}
+.activity-feed-item {
+  display: flex;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-border, #222);
+  font-size: 0.85rem;
+}
+.activity-feed-item time {
+  color: var(--color-muted, #888);
+  min-width: 10rem;
+}
+
+/* ── Devices page ────────────────────────────────────────────────────────── */
+.device-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border, #222);
+}
+.device-row:last-child { border-bottom: none; }
+.device-info { flex: 1; }
+.device-info strong { display: block; margin-bottom: 0.2rem; }
+.device-info small { color: var(--color-muted, #888); font-size: 0.8rem; }
+.device-status {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.device-status.active  { background: #1a4a1a; color: #4fc44f; }
+.device-status.revoked { background: #4a1a1a; color: #c44f4f; }
+.device-status.stale   { background: #3a3a1a; color: #c4c44f; }
+
+/* ── Chat links page ─────────────────────────────────────────────────────── */
+.link-card {
+  padding: 1rem;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.link-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.link-card-header strong { flex: 1; }
+.link-meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--color-muted, #888);
+}
+.link-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.link-type-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-border, #333);
+}
+
+/* ── Hand-off menu ───────────────────────────────────────────────────────── */
+.handoff-menu {
+  position: relative;
+  display: inline-block;
+}
+.handoff-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 200;
+  min-width: 180px;
+  background: var(--color-surface, #18243a);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  padding: 0.4rem 0;
+}
+.handoff-dropdown button {
+  display: flex;
+  width: 100%;
+  padding: 0.45rem 0.9rem;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.88rem;
+  text-align: left;
+  gap: 0.5rem;
+  align-items: center;
+}
+.handoff-dropdown button:hover { background: rgba(255,255,255,0.06); }
+
+/* ── History scope notice in Connections ─────────────────────────────────── */
+.small-text {
+  font-size: 0.8rem;
+  color: var(--color-muted, #888);
+  margin-top: 0.25rem;
+}
