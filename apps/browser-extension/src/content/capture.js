@@ -29,6 +29,47 @@
     Boolean(node.getClientRects().length) &&
     getComputedStyle(node).visibility !== "hidden";
 
+  // ── Attachments (references only; file bytes are never read) ─────────────
+  // data: and blob: URLs are page-local and can be megabytes, so only http(s)
+  // URLs are kept; the file name is still recorded.
+  const MAX_ATTACHMENTS = 20;
+  const safeUrl = (value) => (/^https?:\/\//i.test(value || "") ? String(value).slice(0, 2048) : "");
+  const fileName = (value) => {
+    try { return decodeURIComponent(new URL(value).pathname.split("/").pop() || ""); } catch { return ""; }
+  };
+  const FILE_PATTERN = /\.(pdf|docx?|xlsx?|pptx?|csv|txt|md|json|zip|py|js|ts|tsx|html|css|png|jpe?g|gif|webp|svg)(\?|#|$)/i;
+
+  function collectAttachments(root) {
+    const found = [];
+    const seen = new Set();
+    const push = (type, url, name) => {
+      const item = { type, url: safeUrl(url), name: String(name || "").trim().slice(0, 200) || (type === "image" ? "image" : "file") };
+      const key = `${item.type}|${item.url}|${item.name}`;
+      if (seen.has(key) || found.length >= MAX_ATTACHMENTS) return;
+      seen.add(key);
+      found.push(item);
+    };
+    for (const img of root.querySelectorAll("img")) {
+      const src = img.currentSrc || img.src || "";
+      // Skip avatars and inline icons.
+      if (!src || (img.naturalWidth && img.naturalWidth < 32 && img.naturalHeight < 32)) continue;
+      if (/avatar|profile/i.test(img.alt || "") || img.closest('[class*="avatar" i]')) continue;
+      push("image", src, (img.alt || "").trim() || fileName(src));
+    }
+    for (const link of root.querySelectorAll("a[href]")) {
+      const download = link.getAttribute("download");
+      if (download === null && !FILE_PATTERN.test(link.href)) continue;
+      push("file", link.href, download || link.textContent || fileName(link.href));
+    }
+    // Uploaded-file tiles often have no link; keep the visible file name.
+    for (const tile of root.querySelectorAll('[data-testid*="file" i], [data-testid*="attachment" i]')) {
+      if (tile.querySelector("a[href], img")) continue;
+      const name = (tile.getAttribute("title") || tile.getAttribute("aria-label") || tile.innerText || "").trim().split("\n")[0];
+      if (name) push("file", "", name);
+    }
+    return found;
+  }
+
   function readChatGPT() {
     // Primary: data-message-author-role attribute (stable across ChatGPT versions)
     const nodes = [...document.querySelectorAll("[data-message-author-role]")].filter(visible);
@@ -36,7 +77,9 @@
     return nodes.map((node) => ({
       role: node.getAttribute("data-message-author-role"),
       content: node.innerText.trim(),
-    })).filter((m) => ["user", "assistant"].includes(m.role) && m.content.length > 0);
+      // Uploads render next to the text inside the same conversation turn.
+      attachments: collectAttachments(node.closest('[data-testid^="conversation-turn"], article') || node),
+    })).filter((m) => ["user", "assistant"].includes(m.role) && (m.content.length > 0 || m.attachments.length > 0));
   }
 
   function readClaude() {
@@ -51,16 +94,34 @@
 
     // Interleave by DOM position
     const all = [
-      ...userNodes.map((n) => ({ role: "user", content: n.innerText.trim(), node: n })),
-      ...assistantNodes.map((n) => ({ role: "assistant", content: n.innerText.trim(), node: n })),
-    ].filter((m) => m.content.length > 0);
+      // Claude renders uploads just above the bubble, inside the same message group.
+      ...userNodes.map((n) => ({ role: "user", content: n.innerText.trim(), attachments: collectAttachments(n.closest("[data-test-render-count]") || n), node: n })),
+      ...assistantNodes.map((n) => ({ role: "assistant", content: n.innerText.trim(), attachments: [], node: n })),
+    ].filter((m) => m.content.length > 0 || m.attachments.length > 0);
 
     all.sort((a, b) => {
       const pos = a.node.compareDocumentPosition(b.node);
       return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
     });
 
-    return all.map(({ role, content }) => ({ role, content }));
+    return all.map(({ role, content, attachments }) => ({ role, content, attachments }));
+  }
+
+  // A chat is only captured once it has its own address (ChatGPT /c/<id>,
+  // Claude /chat/<id>); Continuum keeps one conversation per address.
+  function hasChatId() {
+    const path = location.pathname.replace(/\/+$/, "");
+    return provider === "chatgpt" ? /(^|\/)c\/[\w-]+$/.test(path) : /^\/chat\/[\w-]+$/.test(path);
+  }
+
+  // Claude shows the project of a project chat as a link to /project/<uuid>.
+  // (ChatGPT's project is read from the URL by the background worker.)
+  function providerProject() {
+    if (provider !== "claude") return "";
+    const link = [...document.querySelectorAll('a[href^="/project/"]')]
+      .filter((a) => /^\/project\/[0-9a-f-]{8,}$/i.test(a.getAttribute("href") || ""))
+      .filter((a) => visible(a) && !a.closest("nav, aside"))[0];
+    return link ? link.innerText.trim().split("\n")[0].slice(0, 100) : "";
   }
 
   function readMessages() {
@@ -76,7 +137,7 @@
   function isStreaming() {
     if (provider === "chatgpt") {
       // ChatGPT shows a stop button while streaming
-      return Boolean(document.querySelector('[data-testid="stop-button"]'));
+      return Boolean(document.querySelector('[data-testid="stop-button"], button[aria-label^="Stop" i]'));
     }
     if (provider === "claude") {
       // Claude shows data-is-streaming attribute
@@ -125,6 +186,11 @@
       }
       if (automatic && !status.auto) return;
 
+      if (!hasChatId()) {
+        if (!automatic) setBadge("Continuum: send a message first — this chat has no address yet", "#5a3a1a");
+        return;
+      }
+
       // Don't capture while streaming
       if (isStreaming()) {
         setBadge("Continuum: waiting for response…", "#1a3a5c");
@@ -145,8 +211,8 @@
         return;
       }
 
-      // Deduplicate by content hash
-      const key = JSON.stringify(messages);
+      // Deduplicate by content (per chat address)
+      const key = location.pathname + JSON.stringify(messages);
       if (automatic && key === lastHash) return;
 
       setBadge("Continuum: capturing…", "#1a3a5c");
@@ -155,6 +221,7 @@
         type: "capture",
         messages,
         title: document.title,
+        providerProject: providerProject(),
         automatic,
       });
 
@@ -216,10 +283,15 @@
     onUrlChange();
 
     clearTimeout(captureTimer);
-    // Wait 5 seconds after last DOM change before capturing
-    // This handles streaming: DOM keeps changing until response completes
-    captureTimer = setTimeout(() => sync(true), 5000);
+    // Capture 2.5 seconds after the page stops changing (sync also waits while a reply streams).
+    captureTimer = setTimeout(() => sync(true), 2500);
   });
+
+  // Save the latest state when the tab is hidden or closed, so the last reply is never lost.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { clearTimeout(captureTimer); sync(true); }
+  });
+  window.addEventListener("pagehide", () => { clearTimeout(captureTimer); sync(true); });
 
   observer.observe(document.body, {
     subtree: true,
