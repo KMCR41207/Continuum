@@ -1,6 +1,8 @@
 import { pathToFileURL } from "node:url";
 import { serviceClient } from "./service.ts";
 import { embeddingProvider, type EmbeddingProvider } from "./embeddings.ts";
+import { extractionProvider, type ExtractionProvider } from "./extraction.ts";
+import type { ConversationInput } from "../src/lib/memory.ts";
 type WorkerDatabase = {
   rpc: (
     name: string,
@@ -35,6 +37,7 @@ export async function workerTick(
   options: {
     db?: WorkerDatabase;
     provider?: EmbeddingProvider | null;
+    extractor?: ExtractionProvider | null;
     workerId?: string;
     report?: (event: WorkerEvent) => void;
   } = {},
@@ -58,7 +61,48 @@ export async function workerTick(
           p_lease: job.lease_id,
         });
         if (result.error) throw new Error("Import job failed");
+      } else if (job.kind === "extraction") {
+        // LLM-based memory extraction
+        const extractor =
+          options.extractor === undefined
+            ? extractionProvider()
+            : options.extractor;
+        if (!extractor) throw new Error("Extraction provider not configured");
+
+        const input = await db.rpc("extraction_job_input", {
+          p_id: job.id,
+          p_lease: job.lease_id,
+        });
+        if (input.error) throw new Error("Extraction job no longer authorized");
+
+        // Build the ConversationInput from the DB payload
+        const conv = input.data as {
+          id: string;
+          conversation_id: string;
+          workspace_id: string;
+          project_id: string | null;
+          title: string;
+          platform: string;
+          messages: { role: "user" | "assistant"; content: string }[];
+        };
+        const conversationInput: ConversationInput = {
+          title: conv.title,
+          platform: conv.platform,
+          messages: conv.messages,
+        };
+
+        const proposals = await extractor.extract(conversationInput);
+
+        const stored = await db.rpc("complete_extraction_job", {
+          p_id: job.id,
+          p_lease: job.lease_id,
+          p_model: extractor.model,
+          // Send a JSON array, not a string: PostgREST would store a string as a jsonb scalar.
+          p_proposals: proposals,
+        });
+        if (stored.error) throw new Error("Extraction store failed");
       } else {
+        // embedding job
         const provider =
           options.provider === undefined
             ? embeddingProvider()
