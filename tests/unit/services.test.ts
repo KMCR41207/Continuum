@@ -5,6 +5,33 @@ import { embeddingProvider } from "../../server/embeddings";
 import { isPrivilegedKey } from "../../src/lib/publicKey";
 import { createGateway } from "../../server/gateway";
 import { workerTick } from "../../server/worker";
+
+it("worker sends extracted evidence to the completion RPC", async () => {
+  const calls: { name: string; args: Record<string, unknown> }[] = [];
+  const conversation = { title: "Test", platform: "claude", messages: [{ role: "user" as const, content: "I prefer concise explanations." }] };
+  const proposal = { content: "The user prefers concise explanations.", category: "Preferences" as const, confidence: 0.9, sensitivity: "normal" as const, message_index: 0, evidence: "I prefer concise explanations.", reason: "Preference" };
+  const db = { rpc: async (name: string, args: Record<string, unknown>) => {
+    calls.push({ name, args });
+    if (name === "claim_jobs") return { data: [{ id: "job", lease_id: "lease", kind: "extraction" }], error: null };
+    if (name === "extraction_job_input") return { data: conversation, error: null };
+    return { data: null, error: null };
+  } };
+  await workerTick({ db, extractor: { model: "test", extract: async (input) => { expect(input).toEqual(conversation); return [proposal]; } }, report: () => {} });
+  expect(calls.find((c) => c.name === "complete_extraction_job")?.args).toEqual({ p_id: "job", p_lease: "lease", p_model: "test", p_proposals: [proposal] });
+  // A string would reach PostgREST as a jsonb scalar and be rejected by complete_extraction_job.
+  expect(Array.isArray(calls.find((c) => c.name === "complete_extraction_job")?.args.p_proposals)).toBe(true);
+  expect(calls.some((c) => c.name === "finish_job")).toBe(false);
+});
+it("routes every agent operation to its PostgreSQL entry point and maps error codes to HTTP", async () => {
+  const { agentRpc, agentErrorStatus } = await import("../../server/gateway");
+  expect(agentRpc("capture_conversation")).toBe("agent_request");
+  expect(agentRpc("save_memory")).toBe("agent_request");
+  expect(agentRpc("get_handoffs")).toBe("get_agent_handoffs");
+  expect(agentRpc("post_to_link")).toBe("agent_link_request");
+  expect(agentRpc("register_device")).toBe("agent_workspace_request");
+  expect(agentRpc("drop_everything")).toBeNull();
+  expect([401, 403, 409, 429, 400].map((s, i) => agentErrorStatus(["unauthorized", "forbidden", "link_unavailable", "rate_limited", "invalid_request"][i]))).toEqual([401, 403, 409, 429, 400]);
+});
 it("rejects privileged keys in public and agent configuration", () => {
   const key = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url")}.fixture`;
   expect(isPrivilegedKey(key)).toBe(true);
