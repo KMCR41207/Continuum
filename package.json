@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
+  "bin": {
+    "continuum": "server/cli.ts"
+  },
   "scripts": {
+    "continuum": "node server/cli.ts",
     "selfhosted": "node scripts/selfhosted.mjs",
     "test:selfhosted-ui": "playwright test --config playwright.selfhosted.config.ts",
     "extension:build": "node apps/browser-extension/build.mjs",
@@ -16,10 +20,10 @@
     "mcp": "node --env-file-if-exists=.env.server server/mcp.ts",
     "cli": "node server/cli.ts",
     "test:connections-ui": "playwright test --config playwright.connections.config.ts",
-    "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build",
+    "dev": "vite --configLoader runner --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build --configLoader runner",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --configLoader runner",
     "test:e2e": "playwright test"
   },
   "dependencies": {
