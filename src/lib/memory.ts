@@ -10,6 +10,17 @@ export const categories = [
   "Events",
   "Summaries",
 ] as const;
+/** File/image references captured with a message (no file bytes). */
+export const attachmentList = z
+  .array(
+    z.object({
+      type: z.enum(["image", "file"]),
+      name: z.string().trim().max(200),
+      url: z.string().max(2048),
+    }),
+  )
+  .max(20)
+  .optional();
 export const conversationSchema = z.object({
   title: z.string().trim().min(1).max(200),
   platform: z.string().trim().min(1).max(50),
@@ -20,6 +31,7 @@ export const conversationSchema = z.object({
         role: z.enum(["user", "assistant"]),
         content: z.string().trim().min(1).max(20000),
         metadata: z.record(z.string(), z.unknown()).optional(),
+        attachments: attachmentList,
       }),
     )
     .min(1)
@@ -32,6 +44,7 @@ export type Proposal = {
   confidence: number;
   sensitivity: "normal" | "sensitive";
   message_index: number;
+  evidence?: string;
   reason: string;
 };
 export function normalize(content: string) {
