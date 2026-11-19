@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { memberClient, serviceClient } from "./service.ts";
 import { readBody } from "./http.ts";
+import { agentErrorStatus, agentRpc } from "./gateway.ts";
 export function verifyStripeEvent(
   raw: Buffer,
   signature: string,
@@ -118,7 +119,11 @@ export function createApiServer(env: NodeJS.ProcessEnv = process.env) {
         semantic: Boolean(
           env.EMBEDDING_API_KEY && env.EMBEDDING_URL && env.EMBEDDING_MODEL,
         ),
+        extraction: Boolean(
+          env.EXTRACTION_API_KEY && env.EXTRACTION_URL && env.EXTRACTION_MODEL,
+        ),
         embeddingModel: env.EMBEDDING_MODEL || null,
+        extractionModel: env.EXTRACTION_MODEL || null,
         embeddingEndpoint: env.EMBEDDING_URL
           ? (() => {
               try {
@@ -136,15 +141,10 @@ export function createApiServer(env: NodeJS.ProcessEnv = process.env) {
       return;
     }
     // ── Agent proxy endpoints — extension sends token, server holds Supabase keys ──
-    const agentRoutes: Record<string, string> = {
-      "/api/v1/agent/capture_conversation": "capture_conversation",
-      "/api/v1/agent/test_connection": "test_connection",
-      "/api/v1/agent/list_projects": "list_projects",
-      "/api/v1/agent/search_memory": "search_memory",
-      "/api/v1/agent/get_recent_context": "get_recent_context",
-    };
-    if (req.method === "POST" && req.url && agentRoutes[req.url]) {
-      const operation = agentRoutes[req.url];
+    const agentOperation = req.url?.match(/^\/api\/v1\/agent\/([a-z_]+)$/)?.[1];
+    if (req.method === "POST" && agentOperation && agentRpc(agentOperation)) {
+      const operation = agentOperation;
+      const rpc = agentRpc(operation)!;
       const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
       if (!token) { send(401, { error: "Token required" }); return; }
       let raw: Buffer;
@@ -155,15 +155,24 @@ export function createApiServer(env: NodeJS.ProcessEnv = process.env) {
         return;
       }
       try {
-        const rpcUrl = new URL("/rest/v1/rpc/agent_request", env.SUPABASE_URL);
+        const rpcUrl = new URL(`/rest/v1/rpc/${rpc}`, env.SUPABASE_URL);
+        const args = body && typeof body === "object" && !Array.isArray(body) ? body : {};
         const rpcRes = await fetch(rpcUrl.toString(), {
           method: "POST",
           headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({ p_token: token, p_operation: operation, p_args: body }),
+          body: JSON.stringify(
+            rpc === "get_agent_handoffs"
+              ? { p_token: token, p_project: (args as Record<string, unknown>).project_id || null }
+              : { p_token: token, p_operation: operation, p_args: args },
+          ),
           signal: AbortSignal.timeout(30000),
         });
         const result = await rpcRes.json() as Record<string, unknown>;
         if (!rpcRes.ok) { send(rpcRes.status, result); return; }
+        if (result && typeof result === "object" && "error" in result) {
+          send(agentErrorStatus(result.code), result);
+          return;
+        }
         send(200, result);
       } catch (err) {
         send(502, { error: err instanceof Error ? err.message : "Upstream error" });
