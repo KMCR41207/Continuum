@@ -8,59 +8,8 @@ import { db } from "../../lib/supabase";
 import { exportWorkspace, errorMessage } from "../../lib/api";
 import type { Activity } from "../../lib/types";
 import { Empty, Notice, ActionLink } from "../../components/ui";
-export function ActivityPage() {
-  const records = useRecords<Activity>("audit_logs");
-  const [query, setQuery] = useState("");
-  const filtered = records.data.filter((a) =>
-    (a.event + " " + a.entity_type).toLowerCase().includes(query.toLowerCase()),
-  );
-  return (
-    <>
-      <div className="page-header">
-        <div>
-          <span className="eyebrow">A RECORD OF WHAT CHANGED</span>
-          <h1>Activity</h1>
-          <p>Workspace events, without sensitive conversation content.</p>
-        </div>
-      </div>
-      <div className="filter-bar">
-        <label className="search-field">
-          <Search size={16} />
-          <input
-            aria-label="Search activity"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search events"
-          />
-        </label>
-      </div>
-      {records.error && <Notice error>{records.error}</Notice>}
-      {records.loading ? (
-        <p role="status">Loading activity…</p>
-      ) : filtered.length ? (
-        <div className="activity-list full-activity">
-          {filtered.map((a) => (
-            <div key={a.id}>
-              <span className="timeline-dot" />
-              <div>
-                <strong>
-                  {a.event} · {a.entity_type.replaceAll("_", " ")}
-                </strong>
-                <small>{new Date(a.created_at).toLocaleString()}</small>
-                <code>{a.entity_id}</code>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Empty title="A quiet start.">
-          Workspace changes will appear here as you begin importing and
-          organizing context.
-        </Empty>
-      )}
-    </>
-  );
-}
+// The activity dashboard (heatmap, per-agent bars, recent lookups) lives in Activity.tsx.
+export { ActivityPage } from "./Activity";
 export function SettingsPage() {
   const { workspace, reload } = useWorkspace();
   const { session } = useAuth();
