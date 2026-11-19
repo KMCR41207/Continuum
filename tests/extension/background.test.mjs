@@ -13,6 +13,16 @@ import assert from "node:assert/strict";
 
 let listener;
 let state = {};
+const accessLevels = [];
+// Like Chrome: invalid values throw synchronously (this once stopped the service worker registering).
+function strictAccessLevel(options) {
+  const level = options?.accessLevel;
+  if (level !== "TRUSTED_CONTEXTS" && level !== "TRUSTED_AND_UNTRUSTED_CONTEXTS") {
+    throw new TypeError(`Error at property 'accessLevel': Value must be one of TRUSTED_AND_UNTRUSTED_CONTEXTS, TRUSTED_CONTEXTS.`);
+  }
+  accessLevels.push(level);
+  return Promise.resolve();
+}
 const requests = [];
 let fetchShouldFail = false;
 let fetchResponse = { id: "conv-ok", duplicate: false, proposals: 0 };
@@ -22,7 +32,7 @@ globalThis.chrome = {
     local: {
       get: async () => ({ ...state }),
       set: async (v) => { state = { ...state, ...structuredClone(v) }; },
-      setAccessLevel: async () => {},
+      setAccessLevel: strictAccessLevel,
     },
   },
   runtime: {
@@ -40,6 +50,10 @@ globalThis.fetch = async (url, options) => {
 
 // Import once — registers the listener on globalThis.chrome above
 await import("../../apps/browser-extension/src/background.js");
+
+test("service worker startup sets a valid storage access level and never throws", () => {
+  assert.deepEqual(accessLevels, ["TRUSTED_AND_UNTRUSTED_CONTEXTS"]);
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -274,4 +288,102 @@ test("project_id and endpoint are stored in queued items (not Supabase keys)", a
   assert.equal(item.project, "proj-abc");
   assert.equal(item.endpoint, "http://127.0.0.1:3101");
   assert.ok(!JSON.stringify(item).includes("SUPABASE"), "Supabase keys must not be in queue");
+});
+
+const withFiles = (suffix) => capture(suffix, {
+  messages: [
+    {
+      role: "user",
+      content: `Here is the spec ${suffix} ${Math.random()}`,
+      attachments: [
+        { type: "file", name: "spec.pdf", url: "https://files.example.com/spec.pdf" },
+        { type: "image", name: "diagram", url: "data:image/png;base64,AAAA" },
+      ],
+    },
+    { role: "user", content: "", attachments: [{ type: "image", name: "screenshot.png", url: "https://img.example.com/s.png" }] },
+  ],
+});
+
+test("direct mode: a Supabase endpoint calls agent_request with the publishable key, no local server", async () => {
+  resetRequests();
+  fetchShouldFail = false;
+  state = baseState({ endpoint: "https://abcdefgh.supabase.co", supabaseKey: "sb_publishable_testkey" });
+  const sender = { tab: { id: 9 }, url: "https://chatgpt.com/g/g-p-6f2a-atlas-launch/c/1234-abcd" };
+  const result = await send(capture("direct-mode"), sender);
+  assert.ok(!result.error, JSON.stringify(result));
+  const last = requests.at(-1);
+  assert.equal(last.url, "https://abcdefgh.supabase.co/rest/v1/rpc/agent_request");
+  assert.equal(last.body.p_operation, "capture_conversation");
+  assert.equal(last.body.p_token, state.token);
+  assert.equal(last.body.p_args.conversation.metadata.url, "https://chatgpt.com/g/g-p-6f2a-atlas-launch/c/1234-abcd");
+  assert.equal(last.body.p_args.conversation.metadata.provider_project, "atlas launch");
+});
+
+test("direct mode refuses secret and service_role keys before sending anything", async () => {
+  const serviceRole = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url")}.x`;
+  for (const supabaseKey of ["sb_secret_abc", serviceRole]) {
+    resetRequests();
+    state = baseState({ endpoint: "https://abcdefgh.supabase.co", supabaseKey });
+    const result = await send(capture(`secret-${supabaseKey.length}`));
+    assert.equal(requests.length, 0, "nothing may be sent with a privileged key");
+    assert.ok(result.error);
+  }
+});
+
+test("pages without a chat address are not captured; newer snapshots replace queued older ones", async () => {
+  resetRequests();
+  state = baseState();
+  const noId = await send(capture("no-id"), { tab: { id: 3 }, url: "https://chatgpt.com/" });
+  assert.match(noId.error, /no chat ID/);
+  assert.equal(requests.length, 0);
+
+  fetchShouldFail = true;
+  const sender = { tab: { id: 4 }, url: "https://claude.ai/chat/same-chat" };
+  await send(capture("first-snapshot"), sender);
+  await send(capture("second-snapshot"), sender);
+  fetchShouldFail = false;
+  const queued = state.queue.filter((q) => q.conversation.metadata.url === "https://claude.ai/chat/same-chat");
+  assert.equal(queued.length, 1);
+  assert.match(queued[0].conversation.messages[0].content, /second-snapshot/);
+});
+
+test("captureFiles on (default): attachment references are uploaded, data: URLs dropped", async () => {
+  resetRequests();
+  fetchShouldFail = false;
+  state = baseState();
+  delete state.captureFiles;
+  await send(withFiles("files-on"));
+  const sent = requests.at(-1).body.conversation.messages;
+  assert.deepEqual(sent[0].attachments, [
+    { type: "file", name: "spec.pdf", url: "https://files.example.com/spec.pdf" },
+    { type: "image", name: "diagram", url: "" },
+  ]);
+  assert.equal(sent[1].content, "[Attached: screenshot.png]");
+});
+
+test("captureFiles=false strips attachments before upload", async () => {
+  resetRequests();
+  fetchShouldFail = false;
+  state = baseState({ captureFiles: false });
+  await send(withFiles("files-off"));
+  const body = JSON.stringify(requests.at(-1).body);
+  assert.ok(!body.includes("attachments"), "No attachments may be sent");
+  assert.ok(!body.includes("spec.pdf") && !body.includes("screenshot.png"), "File names must not leak");
+  // The attachment-only message has no text left, so it is dropped.
+  assert.equal(requests.at(-1).body.conversation.messages.length, 1);
+});
+
+test("captureFiles=false also strips attachments from items queued earlier", async () => {
+  resetRequests();
+  fetchShouldFail = true;
+  state = baseState();
+  await send(withFiles("queued-then-off"));
+  assert.ok(state.queue.some((q) => JSON.stringify(q).includes("spec.pdf")));
+  fetchShouldFail = false;
+  // Make the failed item due for retry now.
+  state = { ...state, captureFiles: false, queue: state.queue.map((q) => ({ ...q, next: 0 })) };
+  await send({ type: "flush" });
+  const uploaded = requests.find((r) => JSON.stringify(r.body).includes("queued-then-off"));
+  assert.ok(uploaded, "queued item uploaded");
+  assert.ok(!JSON.stringify(uploaded.body).includes("attachments"));
 });

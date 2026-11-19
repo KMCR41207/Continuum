@@ -12,7 +12,11 @@ test("background capture enforces consent, platform, pause, automatic opt-in, au
       local: {
         get: async () => structuredClone(state),
         set: async (value) => { state = { ...state, ...structuredClone(value) }; },
-        setAccessLevel: async () => {},
+        // Like Chrome: only these two values are valid.
+        setAccessLevel: (o) => {
+          if (!["TRUSTED_CONTEXTS", "TRUSTED_AND_UNTRUSTED_CONTEXTS"].includes(o?.accessLevel)) throw new TypeError("invalid accessLevel");
+          return Promise.resolve();
+        },
       },
     },
     runtime: {
