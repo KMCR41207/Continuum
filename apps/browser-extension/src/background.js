@@ -1,6 +1,6 @@
 import { api, settings, save } from "./lib/storage.js";
 import { upload } from "./lib/api.js";
-import { normalizedConversation, contentHash } from "./lib/normalizer.js";
+import { normalizedConversation, contentHash, withoutAttachments } from "./lib/normalizer.js";
 
 let serial = Promise.resolve();
 
@@ -25,7 +25,11 @@ async function flush() {
     if (item.endpoint !== current.endpoint) continue;
 
     try {
-      await upload(current, item.conversation);
+      // The toggle may have been switched off after this item was queued.
+      const conversation = current.captureFiles === false
+        ? { ...item.conversation, messages: withoutAttachments(item.conversation.messages) }
+        : item.conversation;
+      await upload(current, conversation);
       const latest = await settings();
       await save({
         queue: latest.queue.filter((q) => q.hash !== item.hash),
@@ -88,7 +92,12 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
 
       let conversation;
       try {
-        conversation = normalizedConversation(provider, message.messages, message.title, sender.url);
+        // Respect "Capture files and images": strip references before they are
+        // normalized, queued or hashed, so nothing about the files is uploaded.
+        const messages = config.captureFiles === false ? withoutAttachments(message.messages) : message.messages;
+        conversation = normalizedConversation(provider, messages, message.title, sender.url, {
+          providerProject: typeof message.providerProject === "string" ? message.providerProject : "",
+        });
       } catch (err) {
         return { error: `Content error: ${err.message}` };
       }
@@ -102,12 +111,14 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
 
       // Duplicate check — already queued
       if (!config.queue.some((q) => q.hash === hash)) {
-        if (config.queue.length >= 20) {
+        // A newer snapshot of the same chat supersedes any older queued one.
+        const queue = config.queue.filter((q) => q.conversation?.metadata?.url !== conversation.metadata.url);
+        if (queue.length >= 20) {
           return { error: "Queue full. Check network and retry later." };
         }
         await save({
           queue: [
-            ...config.queue,
+            ...queue,
             {
               hash,
               provider,
@@ -167,15 +178,18 @@ api.alarms.onAlarm.addListener(() => {
   serial = serial.catch(() => {}).then(flush);
 });
 
-// Lock storage from content scripts on install/update
-// NOTE: Do NOT use TRUSTED_CONTEXTS — it blocks the service worker itself
-// from reading storage after Chrome restarts it (MV3 lifecycle issue).
-api.runtime.onInstalled.addListener(async () => {
-  // Reset to DEFAULT so the service worker can always read storage,
-  // even after Chrome terminates and restarts it.
-  await api.storage.local.setAccessLevel?.({ accessLevel: "DEFAULT" });
-});
-
-// Also reset on every service worker startup in case it was previously
-// set to TRUSTED_CONTEXTS. This fixes existing installs.
-api.storage.local.setAccessLevel?.({ accessLevel: "DEFAULT" }).catch(() => {});
+// Storage access level. TRUSTED_CONTEXTS would block the restarted MV3 service
+// worker from reading storage, so keep Chrome's default. Chrome accepts only
+// TRUSTED_CONTEXTS or TRUSTED_AND_UNTRUSTED_CONTEXTS (not "DEFAULT"); an invalid
+// value throws synchronously and used to stop the service worker registering.
+// Firefox has no setAccessLevel. This must never be allowed to throw.
+async function resetStorageAccess() {
+  try {
+    await api.storage.local.setAccessLevel?.({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
+  } catch {
+    /* unsupported or rejected: the default access level already applies */
+  }
+}
+api.runtime.onInstalled.addListener(resetStorageAccess);
+// Also on every service worker startup, to repair installs that set TRUSTED_CONTEXTS.
+void resetStorageAccess();
