@@ -8,6 +8,7 @@ export type Workspace = {
     onboarding_step?: number;
     connection?: string;
     semantic_enabled?: boolean;
+    llm_extraction_enabled?: boolean;
   };
   created_at: string;
 };
