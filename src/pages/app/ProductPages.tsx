@@ -543,6 +543,8 @@ export function JobsPage() {
   );
 }
 export function SecurityPage() {
+  const [extraction, setExtraction] = useState<{ available: boolean; model: string }>({ available: false, model: "" });
+  const [configError, setConfigError] = useState(false);
   const [semantic, setSemantic] = useState<{
     available: boolean;
     model: string;
@@ -567,13 +569,14 @@ export function SecurityPage() {
     void productApi("/api/config")
       .then((x) => {
         setAvailable(x.accountDeletion);
+        setExtraction({ available: x.extraction, model: x.extractionModel || "" });
         setSemantic({
           available: x.semantic,
           model: x.embeddingModel || "",
           endpoint: x.embeddingEndpoint || "",
         });
       })
-      .catch(() => setAvailable(false));
+      .catch(() => { setAvailable(false); setConfigError(true); });
   }, []);
   async function change(
     e: React.FormEvent<HTMLFormElement>,
@@ -678,6 +681,19 @@ export function SecurityPage() {
           </form>
         </section>
       ))}
+      <section className="app-section">
+        <h2>AI memory extraction</h2>
+        <p>When enabled, new conversations are sent to the configured AI provider ({extraction.model || "not configured"}) to propose memories. Review the provider's data retention policy before enabling. All proposals require human review.</p>
+        {configError ? <Notice error>Cannot reach the application server. Check its connection and try again.</Notice> : !extraction.available ? <Notice>An administrator must configure the AI provider on the application server before this can be enabled.</Notice> : null}
+        <button className="button secondary" disabled={busy || workspace.owner_id !== session?.user.id || (!extraction.available && !workspace.preferences.llm_extraction_enabled)} onClick={async () => {
+          setBusy(true);
+          setError("");
+          const r = await db().rpc("configure_llm_extraction", { p_workspace: workspace.id, p_enabled: !workspace.preferences.llm_extraction_enabled });
+          if (r.error) setError(r.error.message);
+          else { await reload(); setNotice("AI extraction preference updated for new conversations."); }
+          setBusy(false);
+        }}>{workspace.preferences.llm_extraction_enabled ? "Disable AI extraction" : "Enable AI extraction"}</button>
+      </section>
       <section className="app-section">
         <h2>Semantic processing consent</h2>
         {semantic.available ? (
