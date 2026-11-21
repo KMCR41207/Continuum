@@ -42,7 +42,7 @@ async function init() {
   setBadge(autoBadge, config.auto, "On", "Off");
   setBadge(pausedBadge, config.paused, "Yes", "No", config.paused);
 
-  // Not configured
+  // Not configured — still try to load projects with whatever we have
   if (!config.token) {
     setStatus("Not configured — open Settings", "err");
     return;
@@ -52,7 +52,10 @@ async function init() {
     return;
   }
 
-  // Test connection
+  // Load projects immediately — don't wait for testConnection
+  loadProjects(config);
+
+  // Test connection (non-blocking status update)
   try {
     setStatus("Connecting…");
     await testConnection(config);
@@ -65,12 +68,15 @@ async function init() {
     }
   } catch (err) {
     setStatus(err.message, "err");
-    return;
+    // Don't return — projects may still load fine
   }
+}
 
-  // Load projects
+async function loadProjects(config) {
   try {
     const projects = await fetchProjects(config);
+    // Remove all options except the first (Global)
+    while (projectSel.options.length > 1) projectSel.remove(1);
     projects.forEach((p) => {
       const opt = document.createElement("option");
       opt.value = p.id;
@@ -117,7 +123,21 @@ captureBtn.addEventListener("click", async () => {
 optionsBtn.addEventListener("click", () => api.runtime.openOptionsPage());
 
 openLink.addEventListener("click", () => {
-  api.tabs.create({ url: "http://127.0.0.1:5173/app/conversations" });
+  // Use the configured endpoint's origin if it's a Supabase URL,
+  // otherwise fall back to the known hosted app URL.
+  settings().then((config) => {
+    let url = "https://vqpgclsyyivozgmgoueg.supabase.co/app/conversations";
+    try {
+      const u = new URL(config.endpoint || "");
+      // For local dev server use 5173, for Supabase direct use the app domain
+      if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
+        url = "http://127.0.0.1:5173/app/conversations";
+      }
+    } catch { /* use default */ }
+    api.tabs.create({ url });
+  }).catch(() => {
+    api.tabs.create({ url: "http://127.0.0.1:5173/app/conversations" });
+  });
 });
 
 init();
