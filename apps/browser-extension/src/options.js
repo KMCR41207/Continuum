@@ -65,7 +65,14 @@ async function saveForm() {
       const u = new URL(data.endpoint);
       if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("Invalid protocol");
       if (isSupabaseEndpoint(u)) assertPublicKey(data.supabaseKey);
-      await api.permissions.request({ origins: [u.origin + "/*"] });
+      // Only request optional host permissions for non-Supabase, non-localhost endpoints
+      // (Supabase and localhost are already in host_permissions / optional_host_permissions)
+      const isLocal = ["127.0.0.1", "localhost"].includes(u.hostname);
+      if (!isSupabaseEndpoint(u) && !isLocal) {
+        try {
+          await api.permissions.request({ origins: [u.origin + "/*"] });
+        } catch { /* permission already granted or not needed */ }
+      }
     } catch (err) {
       setStatus(`Invalid endpoint: ${err.message}`, "err");
       return false;
