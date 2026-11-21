@@ -157,7 +157,8 @@
     "text-overflow:ellipsis",
   ].join(";");
   badge.setAttribute("aria-label", "Continuum capture status");
-  document.documentElement.append(badge);
+  // Append to body when available, fall back to documentElement
+  (document.body || document.documentElement).append(badge);
 
   function setBadge(text, color) {
     badge.textContent = text;
@@ -291,6 +292,11 @@
   const observer = new MutationObserver((changes) => {
     // Ignore mutations caused by our own badge
     if (changes.every((c) => badge.contains(c.target))) return;
+
+    // Re-attach badge if ChatGPT's SPA replaced the body
+    if (!document.contains(badge)) {
+      (document.body || document.documentElement).append(badge);
+    }
 
     onUrlChange();
 
