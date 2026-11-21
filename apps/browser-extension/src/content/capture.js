@@ -176,6 +176,12 @@
     try {
       const status = await sendMessage({ type: "status", provider });
 
+      // Service worker may return undefined if it just woke up cold
+      if (!status || typeof status !== "object") {
+        if (!automatic) setBadge("Continuum: not connected — check settings", "#8b1a1a");
+        return;
+      }
+
       if (!status.connected) {
         setBadge("Continuum: not connected", "#8b1a1a");
         return;
@@ -225,7 +231,9 @@
         automatic,
       });
 
-      if (response.error) {
+      if (!response || typeof response !== "object") {
+        setBadge("Continuum: no response from background", "#8b1a1a");
+      } else if (response.error) {
         setBadge(`Continuum: ${response.error}`, "#8b1a1a");
       } else {
         lastHash = key;
@@ -247,6 +255,10 @@
   async function updateStatus() {
     try {
       const status = await sendMessage({ type: "status", provider });
+      if (!status || typeof status !== "object") {
+        setBadge("Continuum: not connected — check settings", "#8b1a1a");
+        return;
+      }
       if (!status.connected) {
         setBadge("Continuum: not connected — check settings", "#8b1a1a");
       } else if (!status.active) {
