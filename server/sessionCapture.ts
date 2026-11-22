@@ -83,7 +83,7 @@ function parseSessionFile(provider: SessionProvider, raw: string, filename: stri
 /** Claude Code sessions are JSONL files. Each line is a message object. */
 function parseClaudeSession(raw: string, filename: string): ConversationInput {
   const lines = raw.split(/\r?\n/).filter(Boolean);
-  const messages: { role: string; content: string }[] = [];
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
   for (const line of lines) {
     try {
       const obj = JSON.parse(line);
@@ -114,11 +114,11 @@ function parseClaudeSession(raw: string, filename: string): ConversationInput {
 
 /** Codex sessions are markdown export files. We extract conversation turns. */
 function parseCodexSession(raw: string, filename: string): ConversationInput {
-  const messages: { role: string; content: string }[] = [];
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
   // Split on headers like "## User" / "## Assistant" or role markers
   const blocks = raw.split(/^##?\s+(User|Assistant|Human|AI|Code)\s*$/im);
   for (let i = 1; i < blocks.length; i += 2) {
-    const role = blocks[i].toLowerCase().includes("user") || blocks[i].toLowerCase().includes("human")
+    const role: "user" | "assistant" = blocks[i].toLowerCase().includes("user") || blocks[i].toLowerCase().includes("human")
       ? "user"
       : "assistant";
     const content = (blocks[i + 1] || "").trim().slice(0, 20000);
@@ -146,9 +146,9 @@ function parseCursorSession(raw: string, filename: string): ConversationInput {
     throw new Error(`Cursor session file is not valid JSON: ${filename}`);
   }
   const rawMessages = (data.messages || data.chatMessages || []) as Array<Record<string, unknown>>;
-  const messages: { role: string; content: string }[] = [];
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
   for (const m of rawMessages) {
-    const role = String(m.role || m.sender || "") === "user" ? "user" : "assistant";
+    const role: "user" | "assistant" = String(m.role || m.sender || "") === "user" ? "user" : "assistant";
     let content = "";
     if (typeof m.content === "string") {
       content = m.content;

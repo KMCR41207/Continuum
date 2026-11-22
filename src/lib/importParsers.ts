@@ -25,7 +25,7 @@ function parseChatGPTConversation(raw: Record<string, unknown>): ConversationInp
   const nodes = Object.values(mapping) as Array<Record<string, unknown>>;
 
   // Sort by create_time if available, otherwise by id
-  const messages: { role: string; content: string }[] = [];
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
   for (const node of nodes) {
     const msg = node.message as Record<string, unknown> | undefined;
     if (!msg) continue;
@@ -47,7 +47,7 @@ function parseChatGPTConversation(raw: Record<string, unknown>): ConversationInp
       content = contentObj.text.trim().slice(0, 20000);
     }
     if (!content) continue;
-    messages.push({ role: String(author), content });
+    messages.push({ role: String(author) as "user" | "assistant", content });
   }
 
   if (!messages.length) return [];
@@ -76,7 +76,7 @@ function parseClaudeConversation(raw: Record<string, unknown>): ConversationInpu
   const chatMessages = raw.chat_messages as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(chatMessages) || !chatMessages.length) return [];
 
-  const messages: { role: string; content: string }[] = [];
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
   for (const m of chatMessages) {
     const sender = String(m.sender || m.role || "");
     const role = sender === "human" || sender === "user" ? "user" : sender === "assistant" ? "assistant" : null;
@@ -120,13 +120,13 @@ function parseGrokConversation(raw: Record<string, unknown>): ConversationInput[
   const msgs = raw.messages as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(msgs) || !msgs.length) return [];
 
-  const messages: { role: string; content: string }[] = [];
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
   for (const m of msgs) {
     const role = String(m.role || "");
     if (!["user", "assistant"].includes(role)) continue;
     const content = String(m.content || "").trim().slice(0, 20000);
     if (!content) continue;
-    messages.push({ role, content });
+    messages.push({ role: role as "user" | "assistant", content });
   }
 
   if (!messages.length) return [];
