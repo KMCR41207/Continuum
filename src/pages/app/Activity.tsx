@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useWorkspace } from "../../components/AppLayout";
 import { useRpc } from "../../lib/product";
 import { Notice } from "../../components/ui";
+import { selfHosted } from "../../lib/localBackend";
 
 type ActivitySummary = {
   daily: { date: string; count: number }[];
@@ -75,6 +76,10 @@ export function ActivityPage() {
 
       {r.error && <Notice error>{r.error}</Notice>}
       {r.loading && <p role="status">Loading activity…</p>}
+
+      {selfHosted && (
+        <Notice>Activity data requires the Supabase backend. This feature is not available in self-hosted mode.</Notice>
+      )}
 
       {r.data && (
         <>
