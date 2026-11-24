@@ -4,6 +4,7 @@ import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/supabase";
 import { Notice, Empty } from "../../components/ui";
 import { errorMessage } from "../../lib/api";
+import { selfHosted } from "../../lib/localBackend";
 
 type ChatLink = {
   id: string;
@@ -84,6 +85,10 @@ export function Links() {
 
       {error && <Notice error>{error}</Notice>}
       {notice && <Notice>{notice}</Notice>}
+
+      {selfHosted && (
+        <Notice>Chat links require the Supabase backend. This feature is not available in self-hosted mode.</Notice>
+      )}
 
       {loading ? (
         <p role="status">Loading links…</p>
