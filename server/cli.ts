@@ -242,6 +242,7 @@ Usage: continuum <command> [options]   (add --json for machine-readable output)
   login [--token ctm_…] [--api URL] [--app URL]
                                Save a scoped token (opens Connections to create one)
   logout                       Revoke this token and remove it from this computer
+  diagnose                     Check token presence, validity, and connection health
   search <query> [--project P] [--limit N]
                                Search approved memories
   capture <file.json> [--project P] [--dry-run]
@@ -252,8 +253,10 @@ Usage: continuum <command> [options]   (add --json for machine-readable output)
   mcp list                     List connections with provider, state and expiry
   mcp on  [--agents claude,cursor,codex]
                                Add Continuum to agent MCP config files
+                               Requires a token — run \`continuum login\` first
   mcp off [--agents …]         Remove Continuum from agent MCP config files
   mcp serve                    Run the MCP server on stdio (used by agents)
+                               Requires CONTINUUM_TOKEN or \`continuum login\`
   projects                     List projects this token can access
   link list | create [private|approval|public] | join <code>
        | post <link> <message> | read <link> [since] | close <link>
@@ -266,7 +269,7 @@ Token: CONTINUUM_TOKEN or ~/.continuum/token. API: CONTINUUM_API_URL or
 ~/.continuum/config.json (default http://127.0.0.1:3101).`;
 
 /** Commands that run without a stored token or device. */
-const LOCAL_COMMANDS = new Set(["help", "--help", "-h", "login", "logout", "mcp"]);
+const LOCAL_COMMANDS = new Set(["help", "--help", "-h", "login", "logout", "mcp", "diagnose", "diagnostics"]);
 
 export async function runCommand(argv: string[], context: AgentCall | Partial<CliContext>): Promise<unknown> {
   const ctx = toContext(context);
@@ -281,7 +284,33 @@ export async function runCommand(argv: string[], context: AgentCall | Partial<Cl
       return { usage: USAGE };
     case "connect":
     case "diagnostics":
-      return call("test_connection");
+    case "diagnose": {
+      let token: string | null = null;
+      try { token = await readToken(ctx.home, ctx.env); } catch { /* ignore */ }
+      const tokenPresent = Boolean(token);
+      const tokenValid = tokenPresent && /^ctm_[0-9a-f]{64}$/.test(token!);
+      let connection: Record<string, unknown> | null = null;
+      let connectionError: string | null = null;
+      if (tokenValid) {
+        try { connection = (await call("test_connection")) as Record<string, unknown>; }
+        catch (e) { connectionError = e instanceof Error ? e.message : String(e); }
+      }
+      return {
+        token_present: tokenPresent,
+        token_valid: tokenValid,
+        token_hint: token ? `${token.slice(0, 8)}…` : null,
+        connected: connection !== null,
+        connection_error: connectionError,
+        permissions: connection ? { capture: (connection as any).capture, retrieval: (connection as any).retrieval, writing: (connection as any).writing } : null,
+        advice: !tokenPresent
+          ? "Run `continuum login` to set a token."
+          : !tokenValid
+            ? "Token format is invalid. It should start with ctm_ followed by 64 hex characters."
+            : connectionError
+              ? `Connection failed: ${connectionError}. Check your endpoint and token.`
+              : "Everything looks good.",
+      };
+    }
     case "status": {
       const [connection, workspace] = await Promise.all([call("test_connection"), call("workspace_status")]);
       const device = await readDevice(ctx.home);
@@ -306,6 +335,9 @@ export async function runCommand(argv: string[], context: AgentCall | Partial<Cl
       const agents = parseAgents(takeOption(args, "--agents"));
       if (action === "list") return call("list_connections");
       if (action === "on" || action === "off") {
+        if (action === "on" && !ctx.env.CONTINUUM_TOKEN) {
+          ctx.log("[continuum] Warning: No token found. Run `continuum login` first or set CONTINUUM_TOKEN before enabling MCP, so the server can authenticate.");
+        }
         const entry = mcpServerEntry(ctx.env);
         const changes: McpChange[] = [];
         for (const agent of agents) changes.push(await configureAgent(agent, ctx.home, action === "on", entry, ctx.exec));
@@ -492,6 +524,14 @@ export function render(command: string | undefined, sub: string | undefined, dat
   }
   if (command === "login" && d?.logged_in) return `Logged in as ${d.connection.provider} connection. Token saved to ${d.token_file}. Device ${d.device_id}.`;
   if (command === "logout") return d.revoked ? "Logged out. The token was revoked." : "Logged out locally. The token could not be revoked remotely; revoke it in Connections.";
+  if (command === "diagnose" || command === "diagnostics") {
+    return [
+      `Token:       ${d.token_present ? (d.token_valid ? `✓ valid (${d.token_hint})` : `✗ invalid format (${d.token_hint})`) : "✗ not set — run continuum login"}`,
+      `Connection:  ${d.connected ? "✓ connected" : `✗ ${d.connection_error || "failed"}`}`,
+      `Permissions: ${d.permissions ? Object.entries(d.permissions).filter(([, v]) => v).map(([k]) => k).join(", ") || "none" : "—"}`,
+      `Advice:      ${d.advice}`,
+    ].join("\n");
+  }
   return JSON.stringify(data, null, 2);
 }
 
@@ -552,6 +592,9 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env,
       createGateway({ ...genv, CONTINUUM_TOKEN: token, ...(apiUrl ? { CONTINUUM_API_URL: apiUrl } : {}) })(operation, payload),
   });
   if (command === "mcp" && (sub === "serve" || sub === undefined)) {
+    if (!genv.CONTINUUM_TOKEN) {
+      console.error("[continuum] Warning: No token found. Run `continuum login` first or set CONTINUUM_TOKEN. The MCP server will start but all calls will fail until a token is configured.");
+    }
     const [{ createMemoryServer }, { StdioServerTransport }] = await Promise.all([
       import("./mcp.ts"), import("@modelcontextprotocol/server/stdio"),
     ]);
