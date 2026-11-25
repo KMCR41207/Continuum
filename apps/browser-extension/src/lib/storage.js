@@ -5,6 +5,8 @@ export const api = globalThis.browser || globalThis.chrome;
 export const defaults = {
   // Auth — the scoped capture token (ctm_…) authorizes every request.
   token: "",
+  // Timestamp when the token was last saved (ISO string). Used to warn after 30 days.
+  tokenSavedAt: "",
   // Supabase project URL (direct, no local server) when the build provides one;
   // otherwise the local Continuum API.
   endpoint: build.supabaseUrl || "http://127.0.0.1:3101",
