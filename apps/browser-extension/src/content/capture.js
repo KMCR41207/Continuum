@@ -187,6 +187,10 @@
         setBadge("Continuum: not connected", "#8b1a1a");
         return;
       }
+      if (status.tokenStale) {
+        setBadge("Continuum: token not refreshed in 30 days — check settings", "#5a3a1a");
+        return;
+      }
       if (!status.active) {
         setBadge("Continuum: capture off");
         return;
