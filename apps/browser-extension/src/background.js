@@ -60,15 +60,21 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
     settings().then((config) => {
       const hasToken = Boolean(config.token && config.token.startsWith("ctm_"));
       const hasEndpoint = Boolean(config.endpoint);
+      // Warn if token hasn't been refreshed in 30 days
+      const tokenAge = config.tokenSavedAt
+        ? (Date.now() - new Date(config.tokenSavedAt).getTime()) / (1000 * 60 * 60 * 24)
+        : 0;
+      const tokenStale = hasToken && tokenAge > 30;
       respond({
         active: config.consent && config[message.provider] && !config.paused,
         auto: config.auto,
         project: config.project || null,
         projectName: config.projectName || null,
         connected: hasToken && hasEndpoint,
+        tokenStale,
       });
     }).catch(() => {
-      respond({ connected: false, active: false, auto: false, project: null, projectName: null });
+      respond({ connected: false, active: false, auto: false, project: null, projectName: null, tokenStale: false });
     });
     return true;
   }
