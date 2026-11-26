@@ -56,6 +56,10 @@ async function saveForm() {
   for (const name of TOGGLES) {
     data[name] = form.elements[name]?.checked ?? false;
   }
+  // Stamp when the token was saved so stale-token warnings work
+  if (data.token && data.token !== config.token) {
+    data.tokenSavedAt = new Date().toISOString();
+  }
   const selectedOpt = projectSelect.options[projectSelect.selectedIndex];
   data.project = projectSelect.value || "";
   data.projectName = data.project ? (selectedOpt?.textContent || "") : "";
