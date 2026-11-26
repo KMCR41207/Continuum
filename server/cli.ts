@@ -284,6 +284,7 @@ export async function runCommand(argv: string[], context: AgentCall | Partial<Cl
       return { usage: USAGE };
     case "connect":
     case "diagnostics":
+      return call("test_connection");
     case "diagnose": {
       let token: string | null = null;
       try { token = await readToken(ctx.home, ctx.env); } catch { /* ignore */ }
