@@ -1251,25 +1251,25 @@ begin
 
   for proposal in select value from jsonb_array_elements(p_proposals) loop
     declare
-      msg_index integer;
-      content   text;
-      evidence  text;
-      category  text;
-      src_msg   jsonb;
+      msg_index  integer;
+      mem_content text;
+      evidence   text;
+      category   text;
+      src_msg    jsonb;
     begin
       -- Skip non-object entries
       if jsonb_typeof(proposal) <> 'object' then continue; end if;
 
-      msg_index := (proposal->>'message_index')::integer;
-      content   := proposal->>'content';
-      evidence  := proposal->>'evidence';
-      category  := proposal->>'category';
+      msg_index   := (proposal->>'message_index')::integer;
+      mem_content := proposal->>'content';
+      evidence    := proposal->>'evidence';
+      category    := proposal->>'category';
 
       -- Validate evidence exists in the source message
       src_msg := inp->'messages'->msg_index;
       if src_msg is null or src_msg->>'role' is distinct from 'user' then continue; end if;
       if coalesce(length(evidence), 0) = 0 or position(evidence in (src_msg->>'content')) = 0 then continue; end if;
-      if coalesce(length(content), 0) not between 12 and 1000 then continue; end if;
+      if coalesce(length(mem_content), 0) not between 12 and 1000 then continue; end if;
 
       -- Validate category is one of the allowed values
       if category is null or not (category = any(valid_categories)) then continue; end if;
@@ -1288,7 +1288,7 @@ begin
         confidence, sensitivity, reason, status
       ) values(
         wid, pid,
-        content,
+        mem_content,
         category,
         (proposal->>'confidence')::numeric,
         coalesce(proposal->>'sensitivity', 'normal'),
@@ -1305,7 +1305,7 @@ begin
         where m.workspace_id = wid
           and m.project_id is not distinct from pid
           and md5(lower(regexp_replace(m.content, '\s+', ' ', 'g'))) =
-              md5(lower(regexp_replace(content, '\s+', ' ', 'g')));
+              md5(lower(regexp_replace(mem_content, '\s+', ' ', 'g')));
       else
         n := n + 1;
       end if;
