@@ -31,3 +31,32 @@ test('page capture reads turn fallback and automatically captures existing and c
     assert.equal(await page.evaluate(() => window.captures[1].messages[1].content), 'Updated answer');
   } finally { await browser.close(); }
 });
+
+test('inspector close control stays available and Escape dismisses it', async () => {
+  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  try {
+    const page = await browser.newPage();
+    await page.route('https://chatgpt.com/**', route => route.fulfill({ contentType: 'text/html', body: '<main><p>Example message</p></main>' }));
+    await page.addInitScript(() => {
+      window.chrome.runtime = {
+        sendMessage(_message, callback) { callback({ connected: true, active: true, auto: false }); },
+        onMessage: { addListener(fn) { window.inspectorListener = fn; } },
+      };
+    });
+    await page.goto('https://chatgpt.com/c/test');
+    await page.addScriptTag({ content: script });
+    async function openInspector() {
+      await page.evaluate(() => window.inspectorListener({ type: 'identify_message' }, {}, () => {}));
+      await page.locator('main p').click();
+    }
+    await openInspector();
+    const panel = page.locator('#continuum-inspector');
+    await panel.locator('pre').evaluate(el => { el.textContent = 'line\n'.repeat(300); el.scrollTop = el.scrollHeight; });
+    assert.equal(await panel.getByRole('button', { name: 'Close' }).isVisible(), true);
+    await panel.getByRole('button', { name: 'Close' }).click();
+    assert.equal(await panel.count(), 0);
+    await openInspector();
+    await page.keyboard.press('Escape');
+    assert.equal(await panel.count(), 0);
+  } finally { await browser.close(); }
+});
