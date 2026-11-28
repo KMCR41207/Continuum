@@ -20,21 +20,36 @@ const RANGES = [
 export function ActivityPage() {
   const { workspace } = useWorkspace();
   const [days, setDays] = useState(30);
-  const r = useRpc<ActivitySummary>("get_activity_summary", {
+  const r = useRpc<Record<string, unknown>>("get_activity_summary", {
     p_workspace: workspace.id,
     p_days: days,
   });
 
-  // A backend may be missing this RPC or return an incompatible response.
-  // Validate before rendering so the workspace does not become a blank page.
-  const data = r.data && Array.isArray(r.data.daily) && Array.isArray(r.data.by_agent) &&
-    Array.isArray(r.data.recent_lookups) && typeof r.data.total === "number" ? r.data : null;
-  const invalidData = r.data !== null && !data;
-  const responseShape = Array.isArray(r.data)
-    ? `array (${r.data.length} items)`
-    : r.data && typeof r.data === "object"
-      ? `fields: ${Object.keys(r.data).sort().join(", ") || "none"}`
-      : typeof r.data;
+  // The deployed RPC names these fields daily_counts and totals.
+  const raw = r.data;
+  const daily = raw?.daily_counts ?? raw?.daily;
+  const agents = raw?.by_agent;
+  const lookups = raw?.recent_lookups;
+  const totals = raw?.totals;
+  const totalValue = typeof raw?.total === "number" ? raw.total
+    : typeof totals === "number" ? totals
+    : totals && typeof totals === "object" && !Array.isArray(totals)
+      ? Object.entries(totals).find(([key, value]) => ["requests", "total", "total_requests"].includes(key) && typeof value === "number")?.[1]
+      : undefined;
+  const data: ActivitySummary | null = Array.isArray(daily) && Array.isArray(agents) && Array.isArray(lookups)
+    ? {
+        daily: daily.map((item) => ({ date: String(item.date ?? item.day ?? ""), count: Number(item.count ?? item.requests ?? 0) || 0 })),
+        by_agent: agents.map((item, index) => ({ connection_id: String(item.connection_id ?? item.id ?? index), name: String(item.name ?? item.connection_name ?? "Unknown agent"), count: Number(item.count ?? item.requests ?? 0) || 0 })),
+        recent_lookups: lookups.map((item) => ({ at: String(item.at ?? item.created_at ?? ""), query: String(item.query ?? ""), connection_name: String(item.connection_name ?? item.name ?? "Unknown agent") })),
+        total: typeof totalValue === "number" ? totalValue : daily.reduce((sum, item) => sum + (Number(item.count ?? item.requests ?? 0) || 0), 0),
+      }
+    : null;
+  const invalidData = raw !== null && !data;
+  const responseShape = Array.isArray(raw)
+    ? `array (${raw.length} items)`
+    : raw && typeof raw === "object"
+      ? `fields: ${Object.keys(raw).sort().join(", ") || "none"}`
+      : typeof raw;
   const maxCount = data?.by_agent.reduce((m, a) => Math.max(m, a.count), 1) ?? 1;
 
   // Build a 12-week heatmap grid (84 cells, most-recent day last)
