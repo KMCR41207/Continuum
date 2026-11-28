@@ -127,7 +127,7 @@ export function ActivityPage() {
       {data && (
         <>
           <section className="app-section">
-            <h2>12-week overview · {data.total.toLocaleString()} total requests</h2>
+            <h2>{days}-day overview · {data.total.toLocaleString()} total requests</h2>
             <div className="heatmap" aria-label="Activity heatmap">
               {weeks.map((week, wi) => (
                 <div className="heatmap-week" key={wi}>
