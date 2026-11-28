@@ -75,6 +75,18 @@
     const nodes = [...document.querySelectorAll("[data-message-author-role]")].filter(visible);
     // Some ChatGPT layouts expose roles on the turn instead of the message.
     if (nodes.length === 0) {
+      // Newer ChatGPT layouts mark user bubbles and rendered responses directly.
+      // Read in document order and avoid capturing nested renderer duplicates.
+      const rendered = [...document.querySelectorAll('[data-user-message-bubble], [data-dil-response]')]
+        .filter(visible)
+        .filter((node, _i, all) => !all.some((other) => other !== node && other.contains(node)));
+      if (rendered.length) {
+        return rendered.map((node) => ({
+          role: node.hasAttribute("data-user-message-bubble") ? "user" : "assistant",
+          content: node.innerText.trim(),
+          attachments: collectAttachments(node),
+        })).filter((m) => m.content.length > 0 || m.attachments.length > 0);
+      }
       const turns = [...document.querySelectorAll('main [data-testid^="conversation-turn"], main article[data-turn]')].filter(visible);
       const fallback = turns.map((turn) => {
         const role = turn.getAttribute("data-turn") || turn.getAttribute("data-message-author-role") ||

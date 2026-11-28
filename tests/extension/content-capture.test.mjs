@@ -60,3 +60,30 @@ test('inspector close control stays available and Escape dismisses it', async ()
     assert.equal(await panel.count(), 0);
   } finally { await browser.close(); }
 });
+
+test('new ChatGPT layout captures users and responses in order and updates automatically', async () => {
+  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  try {
+    const page = await browser.newPage();
+    await page.route('https://chatgpt.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>Chat</title><main><div data-user-message-bubble><div class="text-size-chat whitespace-pre-wrap">Question</div></div><div data-dil-response><div data-testid="chatgpt-writing-block"><div data-markdown-copy-content>Answer</div></div></div></main>' }));
+    await page.addInitScript(() => {
+      window.captures = [];
+      window.chrome.runtime = {
+        sendMessage(message, callback) {
+          if (message.type === 'status') callback({ connected: true, active: true, auto: true });
+          else { window.captures.push(message); callback({ status: 'Saved' }); }
+        },
+        onMessage: { addListener() {} },
+      };
+    });
+    await page.goto('https://chatgpt.com/c/test');
+    await page.addScriptTag({ content: script });
+    await page.waitForFunction(() => window.captures.length === 1, null, { timeout: 8000 });
+    assert.deepEqual(await page.evaluate(() => window.captures[0].messages.map(({role, content}) => ({role, content}))), [
+      { role: 'user', content: 'Question' }, { role: 'assistant', content: 'Answer' },
+    ]);
+    await page.locator('[data-markdown-copy-content]').evaluate(el => { el.textContent = 'Updated answer'; });
+    await page.waitForFunction(() => window.captures.length === 2, null, { timeout: 8000 });
+    assert.equal(await page.evaluate(() => window.captures[1].messages[1].content), 'Updated answer');
+  } finally { await browser.close(); }
+});
