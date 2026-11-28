@@ -30,6 +30,11 @@ export function ActivityPage() {
   const data = r.data && Array.isArray(r.data.daily) && Array.isArray(r.data.by_agent) &&
     Array.isArray(r.data.recent_lookups) && typeof r.data.total === "number" ? r.data : null;
   const invalidData = r.data !== null && !data;
+  const responseShape = Array.isArray(r.data)
+    ? `array (${r.data.length} items)`
+    : r.data && typeof r.data === "object"
+      ? `fields: ${Object.keys(r.data).sort().join(", ") || "none"}`
+      : typeof r.data;
   const maxCount = data?.by_agent.reduce((m, a) => Math.max(m, a.count), 1) ?? 1;
 
   // Build a 12-week heatmap grid (84 cells, most-recent day last)
@@ -79,7 +84,7 @@ export function ActivityPage() {
       </div>
 
       {r.error && <Notice error>{r.error}</Notice>}
-      {invalidData && <Notice error>Activity data is unavailable: the server returned an unexpected response. Check that the database migrations are installed.</Notice>}
+      {invalidData && <Notice error>Activity data is unavailable: the server returned an unexpected response ({responseShape}).</Notice>}
       {r.loading && <p role="status">Loading activity…</p>}
 
       {selfHosted && (
