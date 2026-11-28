@@ -1,7 +1,7 @@
 import { api, settings, save } from "./lib/storage.js";
 import { upload } from "./lib/api.js";
 import { restoreChatTabs } from "./lib/chat-tabs.js";
-import { normalizedConversation, contentHash, withoutAttachments } from "./lib/normalizer.js";
+import { normalizedConversation, contentHash, withoutAttachments, chatPath } from "./lib/normalizer.js";
 
 let serial = Promise.resolve();
 
@@ -104,10 +104,19 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
 
       let conversation;
       try {
+        // MessageSender.url can retain the document's original address after
+        // pushState navigation. Use the address read alongside the messages.
+        const source = new URL(message.url ?? sender.url);
+        if (source.origin !== new URL(sender.url).origin || source.protocol !== "https:" || source.username || source.password) {
+          return { error: "Conversation address does not match the sending site." };
+        }
+        if (!chatPath(provider, source.href)) {
+          return { status: "Waiting for this chat to get its own address.", pending: true };
+        }
         // Respect "Capture files and images": strip references before they are
         // normalized, queued or hashed, so nothing about the files is uploaded.
         const messages = config.captureFiles === false ? withoutAttachments(message.messages) : message.messages;
-        conversation = normalizedConversation(provider, messages, message.title, sender.url, {
+        conversation = normalizedConversation(provider, messages, message.title, source.href, {
           providerProject: typeof message.providerProject === "string" ? message.providerProject : "",
         });
       } catch (err) {

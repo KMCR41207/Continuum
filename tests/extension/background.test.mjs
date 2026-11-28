@@ -334,7 +334,8 @@ test("pages without a chat address are not captured; newer snapshots replace que
   resetRequests();
   state = baseState();
   const noId = await send(capture("no-id"), { tab: { id: 3 }, url: "https://chatgpt.com/" });
-  assert.match(noId.error, /no chat ID/);
+  assert.equal(noId.pending, true);
+  assert.equal(noId.error, undefined);
   assert.equal(requests.length, 0);
 
   fetchShouldFail = true;
@@ -345,6 +346,24 @@ test("pages without a chat address are not captured; newer snapshots replace que
   const queued = state.queue.filter((q) => q.conversation.metadata.url === "https://claude.ai/chat/same-chat");
   assert.equal(queued.length, 1);
   assert.match(queued[0].conversation.messages[0].content, /second-snapshot/);
+});
+
+test("SPA captures use the current chat address while the sender retains the original document URL", async () => {
+  resetRequests();
+  fetchShouldFail = false;
+  state = baseState();
+  const original = { tab: { id: 5 }, url: "https://chatgpt.com/" };
+  const url = "https://chatgpt.com/c/newly-saved";
+  assert.match((await send(capture("saved-after-navigation", { url }), original)).status, /Saved/);
+  assert.equal(requests.at(-1).body.conversation.metadata.url, url);
+  const switched = "https://chatgpt.com/c/other-chat";
+  await send(capture("switched", { url: switched }), { ...original, url });
+  assert.equal(requests.at(-1).body.conversation.metadata.url, switched);
+  const count = requests.length;
+  for (const invalid of ["https://claude.ai/chat/wrong", "http://chatgpt.com/c/wrong", "https://user:password@chatgpt.com/c/wrong"]) {
+    assert.ok((await send(capture("wrong", { url: invalid }), original)).error);
+  }
+  assert.equal(requests.length, count);
 });
 
 test("captureFiles on (default): attachment references are uploaded, data: URLs dropped", async () => {

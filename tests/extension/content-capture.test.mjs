@@ -31,6 +31,12 @@ test('page capture reads turn fallback and automatically captures existing and c
     await page.locator('.markdown').evaluate(el => { el.textContent = 'Updated answer'; });
     await page.waitForFunction(() => window.captures.length === 2, null, { timeout: 8000 });
     assert.equal(await page.evaluate(() => window.captures[1].messages[1].content), 'Updated answer');
+    await page.evaluate(() => {
+      history.pushState({}, '', '/c/switched-chat');
+      document.querySelector('.markdown').textContent = 'Different conversation';
+    });
+    await page.waitForFunction(() => window.captures.length === 3, null, { timeout: 8000 });
+    assert.equal(await page.evaluate(() => window.captures[2].url), 'https://chatgpt.com/c/switched-chat');
     const manual = await page.evaluate(() => new Promise(resolve => window.captureListener({ type: 'manual_capture' }, {}, resolve)));
     assert.equal(manual.status, 'Saved');
   } finally { await browser.close(); }

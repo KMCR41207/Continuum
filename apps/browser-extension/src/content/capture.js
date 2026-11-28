@@ -241,8 +241,8 @@
       if (automatic && !status.auto) return;
 
       if (!hasChatId()) {
-        if (!automatic) setBadge("Continuum: send a message first — this chat has no address yet", "#5a3a1a");
-        return;
+        setBadge("Continuum: waiting for a saved chat");
+        return { status: "Waiting for this chat to get its own address.", pending: true };
       }
 
       // Don't capture while streaming
@@ -270,6 +270,7 @@
       }
 
       // Deduplicate by content (per chat address)
+      const captureUrl = location.href;
       const key = JSON.stringify([location.pathname, document.title, providerProject(), status.project, messages]);
       if (automatic && key === lastHash) return;
 
@@ -277,16 +278,23 @@
 
       const response = await sendMessage({
         type: "capture",
+        url: captureUrl,
         messages,
         title: document.title,
         providerProject: providerProject(),
         automatic,
       }, 40000);
 
+      // A response for the previous chat must not change this chat's badge or hash.
+      if (location.href !== captureUrl) return response;
       if (!response || typeof response !== "object") {
         setBadge("Continuum: no response from background", "#8b1a1a");
       } else if (response.error) {
         setBadge(`Continuum: ${response.error}`, "#8b1a1a");
+      } else if (response.pending) {
+        setBadge(`Continuum: ${response.status}`);
+        clearTimeout(captureTimer);
+        captureTimer = setTimeout(() => sync(true), 3000);
       } else {
         lastHash = key;
         const projectPart = status.projectName ? ` → ${status.projectName}` : "";
@@ -327,7 +335,7 @@
   }
 
   // Update status every 8 seconds
-  statusTimer = setInterval(updateStatus, 8000);
+  statusTimer = setInterval(() => { onUrlChange(); updateStatus(); }, 8000);
   updateStatus();
   // Capture an already-loaded conversation even without subsequent DOM changes.
   captureTimer = setTimeout(() => sync(true), 2500);
