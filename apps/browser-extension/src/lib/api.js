@@ -41,7 +41,7 @@ function failure(status, detail) {
   if (status === 401 || detail?.code === "unauthorized") return new Error("Token rejected. Create a new token in Connections.");
   if (status === 429 || detail?.code === "rate_limited") return new Error("Rate limit reached. Continuum will retry automatically.");
   if (status === 503) return new Error("Continuum server not configured. Check server setup.");
-  const message = typeof detail?.error === "string" ? detail.error : typeof detail?.message === "string" ? detail.message : "";
+  const message = typeof detail?.error === "string" ? detail.error : typeof detail?.message === "string" ? detail.message : typeof detail?.detail === "string" ? detail.detail : "";
   if (status === 403 || detail?.code === "forbidden") return new Error(message || "Token does not have capture permission.");
   return new Error(message ? message.slice(0, 200) : `Server error (${status})`);
 }
