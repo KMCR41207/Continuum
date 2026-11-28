@@ -89,3 +89,18 @@ def test_jobs_recover_expired_leases_and_apply_role_changes(platform):
         db.commit()
     second = claim(app.state.sessions)
     assert second[0] == first[0] and second[1] != first[1]
+
+def test_chat_snapshots_update_stable_conversation_and_mcp_read(platform):
+    app, client, owner, w, p, _ = platform
+    first, payload = capture(client, owner, w, p)
+    _, agent, _ = connection(client, owner, w, p, retrieval=True, all_history=True, capture=True)
+    payload['conversation']['messages'].append({'role': 'user', 'content': 'I prefer concise explanations for future work.', 'attachments': [{'type': 'file', 'name': 'notes.txt', 'url': ''}]})
+    grown = client.post('/api/v1/agent/capture_conversation', headers=agent, json={'project_id': p, 'conversation': payload['conversation']})
+    assert grown.status_code == 200, grown.text
+    assert grown.json()['id'] == first['id']
+    read = client.post('/api/v1/agent/get_conversation', headers=agent, json={'id': first['id']})
+    assert read.status_code == 200, read.text
+    assert len(read.json()['messages']) == 3
+    payload['conversation']['messages'][0]['content'] = 'An edited earlier message'
+    changed = client.post('/api/v1/agent/capture_conversation', headers=agent, json={'project_id': p, 'conversation': payload['conversation']})
+    assert changed.status_code == 409

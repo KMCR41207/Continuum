@@ -18,6 +18,7 @@ class MessageInput(Strict):
     role: Literal["user", "assistant"]
     content: str = Field(min_length=1, max_length=20000)
     metadata: dict = Field(default_factory=dict)
+    attachments: list[dict] = Field(default_factory=list, max_length=20)
 
 
 class ConversationInput(Strict):
