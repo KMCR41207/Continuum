@@ -113,7 +113,9 @@ captureBtn.addEventListener("click", async () => {
     const response = await api.tabs.sendMessage(tab.id, { type: "manual_capture" });
     lastStatus.textContent = response?.status || response?.error || "Capture did not complete.";
   } catch (err) {
-    lastStatus.textContent = `Error: ${err.message}`;
+    lastStatus.textContent = /receiving end does not exist|could not establish connection/i.test(err.message)
+      ? "Refresh this ChatGPT or Claude tab, then try Capture now again."
+      : `Error: ${err.message}`;
   } finally {
     captureBtn.disabled = false;
     captureBtn.innerHTML = orig;
