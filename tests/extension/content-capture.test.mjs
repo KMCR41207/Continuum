@@ -17,7 +17,7 @@ test('page capture reads turn fallback and automatically captures existing and c
           if (message.type === 'status') callback({ connected: true, active: true, auto: true, tokenStale: true });
           else { window.captures.push(message); callback({ status: 'Saved' }); }
         },
-        onMessage: { addListener() {} },
+        onMessage: { addListener(fn) { window.captureListener = fn; } },
       };
     });
     await page.goto('https://chatgpt.com/c/test');
@@ -29,6 +29,8 @@ test('page capture reads turn fallback and automatically captures existing and c
     await page.locator('.markdown').evaluate(el => { el.textContent = 'Updated answer'; });
     await page.waitForFunction(() => window.captures.length === 2, null, { timeout: 8000 });
     assert.equal(await page.evaluate(() => window.captures[1].messages[1].content), 'Updated answer');
+    const manual = await page.evaluate(() => new Promise(resolve => window.captureListener({ type: 'manual_capture' }, {}, resolve)));
+    assert.equal(manual.status, 'Saved');
   } finally { await browser.close(); }
 });
 

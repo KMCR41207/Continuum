@@ -268,6 +268,7 @@
         const projectPart = status.projectName ? ` → ${status.projectName}` : "";
         setBadge(response.status || `Continuum: saved${projectPart}`, "#1a4a1a");
       }
+      return response || { error: "No response from background." };
     } catch (err) {
       if (!automatic) setBadge(`Continuum: error — ${err.message}`, "#8b1a1a");
     }
