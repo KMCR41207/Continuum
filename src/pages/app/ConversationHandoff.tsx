@@ -50,7 +50,7 @@ export function HandoffMenu({
   if (connections.length === 0) return null;
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+    <div ref={ref} className="handoff-menu">
       <button
         className="button secondary"
         aria-haspopup="true"
