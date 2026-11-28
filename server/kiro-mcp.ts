@@ -20,6 +20,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { createGateway } from "./gateway.ts";
+import { registerConversationTool } from "./conversationTool.ts";
 import { pathToFileURL } from "node:url";
 
 const messageSchema = z.object({
@@ -39,6 +40,7 @@ export function createKiroServer(
   call: (operation: string, args?: Record<string, unknown>) => Promise<unknown>,
 ) {
   const server = new McpServer({ name: "continuum-kiro", version: "0.1.0" });
+  registerConversationTool(server, call);
 
   // ── capture_kiro_conversation ─────────────────────────────────────────────
   server.registerTool(
