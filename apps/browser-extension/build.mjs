@@ -48,9 +48,9 @@ for (const browser of ["chrome", "firefox"]) {
   const manifest = {
     manifest_version: 3,
     name: "Continuum authorized capture",
-    version: "0.2.0",
+    version: "0.2.1",
     description: "Capture ChatGPT and Claude conversations to Continuum memory.",
-    permissions: ["storage", "alarms", "tabs", "activeTab"],
+    permissions: ["storage", "alarms", "tabs", "activeTab", "scripting"],
     host_permissions: [
       "https://chatgpt.com/*",
       "https://claude.ai/*",

@@ -1,5 +1,6 @@
 import { api, settings, save } from "./lib/storage.js";
 import { upload } from "./lib/api.js";
+import { restoreChatTabs } from "./lib/chat-tabs.js";
 import { normalizedConversation, contentHash, withoutAttachments } from "./lib/normalizer.js";
 
 let serial = Promise.resolve();
@@ -204,5 +205,7 @@ async function resetStorageAccess() {
   }
 }
 api.runtime.onInstalled.addListener(resetStorageAccess);
+api.runtime.onInstalled.addListener(() => restoreChatTabs().catch(error =>
+  console.warn("[Continuum] Could not reconnect open chat tabs:", error.message)));
 // Also on every service worker startup, to repair installs that set TRUSTED_CONTEXTS.
 void resetStorageAccess();

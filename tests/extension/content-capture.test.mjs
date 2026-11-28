@@ -22,6 +22,8 @@ test('page capture reads turn fallback and automatically captures existing and c
     });
     await page.goto('https://chatgpt.com/c/test');
     await page.addScriptTag({ content: script });
+    await page.addScriptTag({ content: script });
+    assert.equal(await page.getByRole('button', { name: 'Continuum capture status' }).count(), 1);
     await page.waitForFunction(() => window.captures.length === 1, null, { timeout: 8000 });
     assert.deepEqual(await page.evaluate(() => window.captures[0].messages.map(({ role, content }) => ({ role, content }))), [
       { role: 'user', content: 'Question' }, { role: 'assistant', content: 'Answer' },

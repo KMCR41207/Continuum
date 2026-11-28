@@ -1,5 +1,6 @@
 import { api, settings, save } from "./lib/storage.js";
 import { fetchProjects, testConnection } from "./lib/api.js";
+import { sendToChat } from "./lib/chat-tabs.js";
 
 const statusDot   = document.querySelector("#status-dot");
 const statusText  = document.querySelector("#status-text");
@@ -110,7 +111,7 @@ captureBtn.addEventListener("click", async () => {
       lastStatus.textContent = "Open ChatGPT or Claude first.";
       return;
     }
-    const response = await api.tabs.sendMessage(tab.id, { type: "manual_capture" });
+    const response = await sendToChat(tab.id, { type: "manual_capture" });
     lastStatus.textContent = response?.status || response?.error || "Capture did not complete.";
   } catch (err) {
     lastStatus.textContent = /receiving end does not exist|could not establish connection/i.test(err.message)
@@ -129,7 +130,7 @@ document.querySelector("#identify-message").addEventListener("click", async () =
       lastStatus.textContent = "Open a ChatGPT or Claude conversation first.";
       return;
     }
-    await api.tabs.sendMessage(tab.id, { type: "identify_message" });
+    await sendToChat(tab.id, { type: "identify_message" });
     window.close();
   } catch (err) { lastStatus.textContent = `Error: ${err.message}`; }
 });

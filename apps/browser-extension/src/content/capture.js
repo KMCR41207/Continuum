@@ -3,12 +3,24 @@
   const hostname = location.hostname;
   const provider = hostname === "chatgpt.com" ? "chatgpt" : hostname === "claude.ai" ? "claude" : null;
   if (!provider) return;
+  // Manifest injection and recovery can reach the same isolated world together.
+  if (globalThis.continuumCaptureRuntime === api.runtime) return;
+  globalThis.continuumCaptureRuntime = api.runtime;
+  // Older builds reappend their badge if removed. Hide their orphaned controls.
+  for (const old of document.querySelectorAll('button[aria-label="Continuum capture status"]')) {
+    old.style.setProperty("display", "none", "important");
+  }
+  document.getElementById("continuum-inspector")?.remove();
 
   // Wrapper: sendMessage with a timeout so the badge never hangs on "loading…"
   function sendMessage(msg, timeoutMs = 5000) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
       try {
+        if (globalThis.browser) {
+          api.runtime.sendMessage(msg).then(resolve, reject).finally(() => clearTimeout(timer));
+          return;
+        }
         api.runtime.sendMessage(msg, (response) => {
           clearTimeout(timer);
           if (api.runtime.lastError) {
@@ -194,9 +206,21 @@
   let captureTimer = null;
   let statusTimer = null;
   let currentUrl = location.href;
+  let retired = false;
+
+  function invalidated(error) {
+    if (!/extension context invalidated/i.test(error?.message || "")) return false;
+    retired = true;
+    observer.disconnect();
+    clearTimeout(captureTimer);
+    clearInterval(statusTimer);
+    setBadge("Continuum updated. Open the extension to reconnect.");
+    return true;
+  }
 
   // ── Core sync function ───────────────────────────────────────────────────
   async function sync(automatic) {
+    if (retired) return;
     try {
       const status = await sendMessage({ type: "status", provider });
 
@@ -270,7 +294,8 @@
       }
       return response || { error: "No response from background." };
     } catch (err) {
-      if (!automatic) setBadge(`Continuum: error — ${err.message}`, "#8b1a1a");
+      if (!invalidated(err) && !automatic) setBadge(`Continuum: error — ${err.message}`, "#8b1a1a");
+      return { error: err.message };
     }
   }
 
@@ -296,8 +321,8 @@
         const projectPart = status.projectName ? ` (${status.projectName})` : "";
         setBadge(`Continuum: ${status.auto ? "auto" : "manual"}${projectPart}`, "#18243a");
       }
-    } catch {
-      setBadge("Continuum: not connected — check settings", "#8b1a1a");
+    } catch (err) {
+      if (!invalidated(err)) setBadge("Continuum: not connected — check settings", "#8b1a1a");
     }
   }
 
