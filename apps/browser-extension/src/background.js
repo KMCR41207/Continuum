@@ -29,7 +29,7 @@ async function flush() {
       const conversation = current.captureFiles === false
         ? { ...item.conversation, messages: withoutAttachments(item.conversation.messages) }
         : item.conversation;
-      await upload(current, conversation);
+      await upload({ ...current, project: item.project }, conversation);
       const latest = await settings();
       await save({
         queue: latest.queue.filter((q) => q.hash !== item.hash),
@@ -151,7 +151,8 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
 
       const queued = after.queue.find((q) => q.hash === hash);
       if (queued && queued.attempts > 0) {
-        return { error: "Upload failed. Will retry automatically. Check settings if this persists." };
+        const last = after.history[0]?.status || "Upload failed.";
+        return { error: `${last} Will retry automatically.` };
       }
 
       return { status: "Queued for upload." };

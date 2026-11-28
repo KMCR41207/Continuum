@@ -73,7 +73,18 @@
   function readChatGPT() {
     // Primary: data-message-author-role attribute (stable across ChatGPT versions)
     const nodes = [...document.querySelectorAll("[data-message-author-role]")].filter(visible);
-    if (nodes.length === 0) return null; // DOM not ready
+    // Some ChatGPT layouts expose roles on the turn instead of the message.
+    if (nodes.length === 0) {
+      const turns = [...document.querySelectorAll('main [data-testid^="conversation-turn"], main article[data-turn]')].filter(visible);
+      const fallback = turns.map((turn) => {
+        const role = turn.getAttribute("data-turn") || turn.getAttribute("data-message-author-role") ||
+          (turn.querySelector('[data-testid="user-message"]') ? "user" :
+           turn.querySelector('[data-testid="assistant-message"], .markdown') ? "assistant" : "");
+        const body = turn.querySelector('[data-testid="user-message"], [data-testid="assistant-message"], .markdown') || turn;
+        return { role, content: body.innerText.trim(), attachments: collectAttachments(turn) };
+      }).filter((m) => ["user", "assistant"].includes(m.role) && (m.content || m.attachments.length));
+      return fallback.length ? fallback : null;
+    }
     return nodes.map((node) => ({
       role: node.getAttribute("data-message-author-role"),
       content: node.innerText.trim(),
@@ -185,15 +196,11 @@
 
       if (!status.connected) {
         setBadge("Continuum: not connected", "#8b1a1a");
-        return;
-      }
-      if (status.tokenStale) {
-        setBadge("Continuum: token not refreshed in 30 days — check settings", "#5a3a1a");
-        return;
+        return { error: "Not connected. Check extension settings." };
       }
       if (!status.active) {
         setBadge("Continuum: capture off");
-        return;
+        return { error: "Capture is disabled or paused." };
       }
       if (automatic && !status.auto) return;
 
@@ -209,17 +216,18 @@
           clearTimeout(captureTimer);
           captureTimer = setTimeout(() => sync(true), 3000);
         }
-        return;
+        return { error: "Waiting for the response to finish." };
       }
 
       const messages = readMessages();
       if (!messages) {
         if (!automatic) setBadge("Continuum: no messages found", "#5a3a1a");
-        return;
+        else { clearTimeout(captureTimer); captureTimer = setTimeout(() => sync(true), 5000); }
+        return { error: "No messages found on this page." };
       }
       if (messages.length === 0) {
         if (!automatic) setBadge("Continuum: conversation is empty");
-        return;
+        return { error: "Conversation is empty." };
       }
 
       // Deduplicate by content (per chat address)
@@ -234,7 +242,7 @@
         title: document.title,
         providerProject: providerProject(),
         automatic,
-      });
+      }, 40000);
 
       if (!response || typeof response !== "object") {
         setBadge("Continuum: no response from background", "#8b1a1a");
@@ -280,6 +288,8 @@
   // Update status every 8 seconds
   statusTimer = setInterval(updateStatus, 8000);
   updateStatus();
+  // Capture an already-loaded conversation even without subsequent DOM changes.
+  captureTimer = setTimeout(() => sync(true), 2500);
 
   // ── URL change detection (conversation switching) ────────────────────────
   function onUrlChange() {
@@ -325,7 +335,7 @@
   api.runtime.onMessage.addListener((message, _sender, respond) => {
     if (message.type === "manual_capture") {
       clearTimeout(captureTimer);
-      sync(false).then(() => respond({ ok: true })).catch((err) => respond({ error: err.message }));
+      sync(false).then((result) => respond(result || { error: "Capture did not complete." })).catch((err) => respond({ error: err.message }));
       return true;
     }
   });
