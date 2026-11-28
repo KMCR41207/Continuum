@@ -249,10 +249,10 @@
         <div class="field">
           <label>Continuum server URL</label>
           <input name="endpoint" type="text" placeholder="https://your-project.supabase.co">
-          <p class="field-hint">Your Supabase project URL sends captures straight to Continuum, with no local server. A local API address such as <code>http://127.0.0.1:3101</code> also works while <code>pnpm api</code> runs.</p>
+          <p class="field-hint">Your Supabase project URL sends captures straight to Continuum, with no local server. For self-hosted Continuum use <code>http://127.0.0.1:8000</code>; the legacy local API uses <code>http://127.0.0.1:3101</code>.</p>
         </div>
         <div class="field">
-          <label>Supabase publishable key</label>
+          <label>Supabase publishable key (advanced)</label>
           <input name="supabaseKey" type="text" autocomplete="off" placeholder="sb_publishable_… or anon key">
           <p class="field-hint">Needed only with a Supabase URL. This key is public; never paste the service_role or secret key.</p>
         </div>

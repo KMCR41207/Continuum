@@ -111,7 +111,7 @@ captureBtn.addEventListener("click", async () => {
       return;
     }
     const response = await api.tabs.sendMessage(tab.id, { type: "manual_capture" });
-    lastStatus.textContent = response?.status || response?.error || "Done.";
+    lastStatus.textContent = response?.status || response?.error || "Capture did not complete.";
   } catch (err) {
     lastStatus.textContent = `Error: ${err.message}`;
   } finally {
