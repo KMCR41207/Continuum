@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Plus, RefreshCw, KeyRound } from "lucide-react";
 import { useWorkspace } from "../../components/AppLayout";
 import { useRecords } from "../../lib/useRecords";
@@ -111,6 +111,34 @@ export function Connections() {
   const [busy, setBusy] = useState(false);
   const [raw, setRaw] = useState("");
   const [project, setProject] = useState("");
+  const [params, setParams] = useSearchParams();
+  const ideChat = params.get("ide_chat");
+  const [setupError, setSetupError] = useState("");
+  useEffect(() => {
+    if (!ideChat) return;
+    let cancelled = false;
+    async function prepare() {
+      const { data, error } = await db().from("conversations").select("id,title,project_id,excluded")
+        .eq("workspace_id", workspace.id).eq("id", ideChat).maybeSingle();
+      if (cancelled) return;
+      if (error || !data || data.excluded) {
+        setSetupError("This chat is unavailable for IDE access in this workspace.");
+        return;
+      }
+      open("new");
+      setSetupError("");
+      setName(`Codex · ${data.title}`.slice(0, 100));
+      setProvider("codex");
+      setPermissions({
+        ...defaults, retrieval: true, global_access: data.project_id === null,
+        project_ids: data.project_id ? [data.project_id] : [], conversation_ids: [data.id],
+      });
+      setNotice(`Review access for “${data.title}”. Codex can read this chat and approved memories in its scope. After creating the credential, copy it to the Continuum login window.`);
+      setParams(previous => { const next = new URLSearchParams(previous); next.delete("ide_chat"); return next; }, { replace: true });
+    }
+    void prepare().catch(() => { if (!cancelled) setSetupError("Could not load the selected chat. Refresh to try again."); });
+    return () => { cancelled = true; };
+  }, [ideChat, workspace.id, setParams]);
   function open(c: Connection | "new") {
     setSelected(c);
     setPermissions(c === "new" ? { ...defaults } : c);
@@ -246,6 +274,7 @@ export function Connections() {
         Provider names identify your intended source or client; live provider
         compatibility has not been verified.
       </Notice>
+      {setupError && <Notice error>{setupError}</Notice>}
       <details className="notice">
         <summary>Set up browser capture and IDE access</summary>
         <ol>

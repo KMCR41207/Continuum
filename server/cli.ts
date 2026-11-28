@@ -12,6 +12,7 @@ import { chmod, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, hostname, platform as osPlatform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { Writable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AgentError, createGateway, type AgentCall } from "./gateway.ts";
 import { captureCodingSession, type SessionProvider } from "./sessionCapture.ts";
@@ -239,7 +240,7 @@ export const USAGE = `continuum — Continuum memory from the command line
 Usage: continuum <command> [options]   (add --json for machine-readable output)
 
   status                       Plan, usage, connected agents, queue and last sync
-  login [--token ctm_…] [--api URL] [--app URL]
+  login [--conversation UUID] [--api URL] [--app URL]
                                Save a scoped token (opens Connections to create one)
   logout                       Revoke this token and remove it from this computer
   diagnose                     Check token presence, validity, and connection health
@@ -423,19 +424,28 @@ async function login(args: string[], ctx: CliContext) {
   const config = await readLocalConfig(ctx.home);
   const api = takeOption(args, "--api");
   const app = takeOption(args, "--app");
+  const conversationId = takeOption(args, "--conversation");
+  if (conversationId && !UUID.test(conversationId)) throw new Error("Use the conversation ID from Chat Links.");
   let token = takeOption(args, "--token") || "";
   if (api) config.api_url = new URL(api).toString().replace(/\/$/, "");
   if (app) config.app_url = new URL(app).toString().replace(/\/$/, "");
   if (!token) {
-    const url = `${config.app_url || ctx.env.CONTINUUM_APP_URL || "http://127.0.0.1:5173"}/app/connections`;
-    const opened = await ctx.openUrl(url).catch(() => false);
+    const url = new URL("/app/connections", config.app_url || ctx.env.CONTINUUM_APP_URL || "http://127.0.0.1:5173");
+    if (conversationId) url.searchParams.set("ide_chat", conversationId);
+    const opened = await ctx.openUrl(url.href).catch(() => false);
     ctx.log(opened ? `Opened ${url}` : `Open this page to create a token: ${url}`);
-    ctx.log("Create a connection (provider: Claude, Codex, Cursor or Other), then paste its token.");
-    token = (await ctx.prompt("Token (ctm_…): ")).trim();
+    ctx.log(conversationId ? "Approve the prefilled connection in Continuum, click Copy token, then paste here and press Enter." : "Create a connection in Continuum, then paste its token here and press Enter.");
+    token = (await ctx.prompt("Continuum token (hidden): ")).trim();
   }
   if (!TOKEN.test(token)) throw new Error("That is not a Continuum token. Tokens start with ctm_ followed by 64 hex characters.");
   const call = ctx.gatewayFor(token, api ? config.api_url : undefined);
   const connection = (await call("test_connection")) as Record<string, unknown>;
+  if (conversationId) {
+    const rows = await call("get_conversation", { id: conversationId });
+    if (!Array.isArray(rows) || !rows.some(row => row?.id === conversationId && Array.isArray(row.messages))) {
+      throw new Error("This connection cannot read the selected chat. Check its project and conversation permissions.");
+    }
+  }
   await writePrivate(paths.token, `${token}\n`);
   await writePrivate(paths.config, JSON.stringify(config, null, 2) + "\n");
   let device = await readDevice(ctx.home);
@@ -559,8 +569,10 @@ async function openInBrowser(url: string): Promise<boolean> {
   });
 }
 async function ask(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  try { return await rl.question(question); } finally { rl.close(); }
+  process.stderr.write(question);
+  const muted = new Writable({ write(_chunk, _encoding, done) { done(); } });
+  const rl = createInterface({ input: process.stdin, output: muted, terminal: Boolean(process.stdin.isTTY), historySize: 0 });
+  try { return await rl.question(""); } finally { rl.close(); process.stderr.write("\n"); }
 }
 
 function toContext(context: AgentCall | Partial<CliContext>): CliContext {

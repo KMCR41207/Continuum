@@ -106,6 +106,7 @@ export function Links() {
               </div>
               <div className="link-actions">
                 <button className="button secondary" disabled={conversation.excluded} onClick={() => void copy(conversation)}>Copy IDE prompt</button>
+                {!conversation.excluded && !selfHosted && <Link className="button secondary" to={`/app/connections?ide_chat=${encodeURIComponent(conversation.id)}`}>Set up Codex access</Link>}
                 <Link className="button secondary" to={`/app/conversations?open=${encodeURIComponent(conversation.id)}`}>Open conversation</Link>
               </div>
             </div>

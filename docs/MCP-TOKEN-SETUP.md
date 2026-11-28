@@ -4,6 +4,19 @@ This guide explains how to configure the Continuum MCP server so agents can auth
 
 ## Quick start
 
+For a single saved chat, open **Chat Links** in Continuum and choose **Copy IDE prompt**. If Codex already has access, paste that prompt into Codex. Each read fetches the latest saved messages.
+
+For first-time Codex setup, run the following from the Continuum project folder. Replace `CHAT_ID` with the ID in the copied prompt.
+
+```bash
+node server/cli.ts login --conversation CHAT_ID
+node server/cli.ts mcp on --agents codex
+```
+
+The first command opens Connections with the chat and its project scope already selected. Review the permissions, tick the authorization box and choose **Create scoped credential**. Choose **Copy token**, paste it into the local login window and press Enter. The window hides your input. Continuum verifies the chat is readable before saving the token. Restart Codex after registration.
+
+For a general connection or another client, use the existing CLI commands below.
+
 ```bash
 # 1. Log in and save your token
 continuum login
