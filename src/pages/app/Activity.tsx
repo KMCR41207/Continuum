@@ -11,6 +11,51 @@ type ActivitySummary = {
   total: number;
 };
 
+/** Convert supported activity RPC contracts without trusting malformed rows. */
+export function normalizeActivity(raw: unknown): ActivitySummary | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const rawDaily = Object.hasOwn(value, "daily_counts") ? value.daily_counts : value.daily;
+  const rawAgents = value.by_agent;
+  const rawLookups = value.recent_lookups;
+  // SQL aggregate results can be null when there are no matching rows.
+  if (!(Array.isArray(rawDaily) || rawDaily === null) ||
+      !(Array.isArray(rawAgents) || rawAgents === null) ||
+      !(Array.isArray(rawLookups) || rawLookups === null)) return null;
+  const record = (item: unknown): Record<string, unknown> | null =>
+    item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : null;
+  const count = (n: unknown): number | null => {
+    if (typeof n !== "number" || !Number.isFinite(n) || n < 0) return null;
+    return n;
+  };
+  const daily: ActivitySummary["daily"] = [];
+  for (const item of rawDaily ?? []) {
+    const row = record(item);
+    const date = row?.date ?? row?.day;
+    const amount = count(row?.count ?? row?.requests);
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || amount === null) return null;
+    daily.push({ date, count: amount });
+  }
+  const by_agent: ActivitySummary["by_agent"] = [];
+  for (const [index, item] of (rawAgents ?? []).entries()) {
+    const row = record(item);
+    const amount = count(row?.count ?? row?.requests);
+    if (!row || amount === null) return null;
+    by_agent.push({ connection_id: String(row.connection_id ?? row.id ?? index), name: String(row.name ?? row.connection_name ?? "Unknown agent"), count: amount });
+  }
+  const recent_lookups: ActivitySummary["recent_lookups"] = [];
+  for (const item of rawLookups ?? []) {
+    const row = record(item);
+    const at = row?.at ?? row?.created_at;
+    if (!row || typeof at !== "string" || !Number.isFinite(Date.parse(at))) return null;
+    recent_lookups.push({ at, query: typeof row.query === "string" ? row.query : "", connection_name: String(row.connection_name ?? row.name ?? "Unknown agent") });
+  }
+  const totals = record(value.totals);
+  const total = count(value.total) ?? count(value.totals) ?? count(totals?.requests) ??
+    count(totals?.total) ?? count(totals?.total_requests) ?? daily.reduce((sum, row) => sum + row.count, 0);
+  return { daily, by_agent, recent_lookups, total };
+}
+
 const RANGES = [
   { label: "30 days", value: 30 },
   { label: "60 days", value: 60 },
@@ -25,48 +70,21 @@ export function ActivityPage() {
     p_days: days,
   });
 
-  // The deployed RPC names these fields daily_counts and totals.
   const raw = r.data;
-  const daily = raw?.daily_counts ?? raw?.daily;
-  const agents = raw?.by_agent;
-  const lookups = raw?.recent_lookups;
-  const totals = raw?.totals;
-  const totalValue = typeof raw?.total === "number" ? raw.total
-    : typeof totals === "number" ? totals
-    : totals && typeof totals === "object" && !Array.isArray(totals)
-      ? Object.entries(totals).find(([key, value]) => ["requests", "total", "total_requests"].includes(key) && typeof value === "number")?.[1]
-      : undefined;
-  const data: ActivitySummary | null = Array.isArray(daily) && Array.isArray(agents) && Array.isArray(lookups)
-    ? {
-        daily: daily.map((item) => ({ date: String(item.date ?? item.day ?? ""), count: Number(item.count ?? item.requests ?? 0) || 0 })),
-        by_agent: agents.map((item, index) => ({ connection_id: String(item.connection_id ?? item.id ?? index), name: String(item.name ?? item.connection_name ?? "Unknown agent"), count: Number(item.count ?? item.requests ?? 0) || 0 })),
-        recent_lookups: lookups.map((item) => ({ at: String(item.at ?? item.created_at ?? ""), query: String(item.query ?? ""), connection_name: String(item.connection_name ?? item.name ?? "Unknown agent") })),
-        total: typeof totalValue === "number" ? totalValue : daily.reduce((sum, item) => sum + (Number(item.count ?? item.requests ?? 0) || 0), 0),
-      }
-    : null;
+  const data = normalizeActivity(raw);
   const invalidData = raw !== null && !data;
-  const responseShape = Array.isArray(raw)
-    ? `array (${raw.length} items)`
-    : raw && typeof raw === "object"
-      ? `fields: ${Object.keys(raw).sort().join(", ") || "none"}`
-      : typeof raw;
   const maxCount = data?.by_agent.reduce((m, a) => Math.max(m, a.count), 1) ?? 1;
 
-  // Build a 12-week heatmap grid (84 cells, most-recent day last)
+  // Group the selected range by UTC dates, matching the backend's buckets.
   const dailyMap = new Map(data?.daily.map((d) => [d.date, d.count]) ?? []);
   const today = new Date();
-  const cells: { date: string; count: number }[] = [];
-  for (let i = 83; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    cells.push({ date: key, count: dailyMap.get(key) ?? 0 });
-  }
-  // Chunk into 12 weeks of 7 days
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const cells = Array.from({ length: days }, (_, i) => {
+    const date = new Date(todayUtc - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10);
+    return { date, count: dailyMap.get(date) ?? 0 };
+  });
   const weeks: { date: string; count: number }[][] = [];
-  for (let w = 0; w < 12; w++) {
-    weeks.push(cells.slice(w * 7, w * 7 + 7));
-  }
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
   const heatLevel = (count: number) => {
     if (count === 0) return "0";
     if (count < 5) return "1";
@@ -99,7 +117,7 @@ export function ActivityPage() {
       </div>
 
       {r.error && <Notice error>{r.error}</Notice>}
-      {invalidData && <Notice error>Activity data is unavailable: the server returned an unexpected response ({responseShape}).</Notice>}
+      {invalidData && <Notice error>Activity data is unavailable: the server returned an unexpected response.</Notice>}
       {r.loading && <p role="status">Loading activity…</p>}
 
       {selfHosted && (
