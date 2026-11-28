@@ -120,6 +120,18 @@ captureBtn.addEventListener("click", async () => {
   }
 });
 
+document.querySelector("#identify-message").addEventListener("click", async () => {
+  try {
+    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !["chatgpt.com", "claude.ai"].includes(new URL(tab.url || "").hostname)) {
+      lastStatus.textContent = "Open a ChatGPT or Claude conversation first.";
+      return;
+    }
+    await api.tabs.sendMessage(tab.id, { type: "identify_message" });
+    window.close();
+  } catch (err) { lastStatus.textContent = `Error: ${err.message}`; }
+});
+
 optionsBtn.addEventListener("click", () => api.runtime.openOptionsPage());
 
 openLink.addEventListener("click", () => {

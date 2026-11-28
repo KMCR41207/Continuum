@@ -336,6 +336,38 @@
 
   // ── Listen for manual capture from popup ─────────────────────────────────
   api.runtime.onMessage.addListener((message, _sender, respond) => {
+    if (message.type === "identify_message") {
+      setBadge("Continuum: click a message to inspect", "#1a3a5c");
+      const inspect = (event) => {
+        if (badge.contains(event.target)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const nodes = event.composedPath().filter((node) => node instanceof Element).slice(0, 10);
+        const details = nodes.map((node) => ({
+          tag: node.tagName,
+          classes: typeof node.className === "string" ? node.className.slice(0, 160) : "",
+          testid: node.getAttribute("data-testid"),
+          turn: node.getAttribute("data-turn"),
+          role: node.getAttribute("data-message-author-role"),
+          attributes: [...node.attributes].map((attr) => attr.name),
+        }));
+        const panel = document.createElement("div");
+        panel.style.cssText = "position:fixed;inset:10% 15%;z-index:2147483647;background:#111b2c;color:white;padding:20px;border:1px solid #8293ad;border-radius:12px;overflow:auto;font:12px monospace;white-space:pre-wrap";
+        const close = document.createElement("button");
+        close.textContent = "Close";
+        close.style.cssText = "padding:8px;cursor:pointer";
+        close.onclick = () => panel.remove();
+        const pre = document.createElement("pre");
+        pre.style.cssText = "white-space:pre-wrap;word-break:break-word";
+        pre.textContent = JSON.stringify(details, null, 2);
+        panel.append(close, document.createTextNode("  Message structure ? no message text"), pre);
+        (document.body || document.documentElement).append(panel);
+        setBadge("Continuum: structure ready", "#1a4a1a");
+      };
+      document.addEventListener("click", inspect, { capture: true, once: true });
+      respond({ ok: true });
+      return;
+    }
     if (message.type === "manual_capture") {
       clearTimeout(captureTimer);
       sync(false).then((result) => respond(result || { error: "Capture did not complete." })).catch((err) => respond({ error: err.message }));
