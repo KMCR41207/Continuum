@@ -72,10 +72,11 @@ async function saveForm() {
       // Only request optional host permissions for non-Supabase, non-localhost endpoints
       // (Supabase and localhost are already in host_permissions / optional_host_permissions)
       const isLocal = ["127.0.0.1", "localhost"].includes(u.hostname);
-      if (!isSupabaseEndpoint(u) && !isLocal) {
-        try {
-          await api.permissions.request({ origins: [u.origin + "/*"] });
-        } catch { /* permission already granted or not needed */ }
+      if (!isSupabaseEndpoint(u)) {
+        const granted = await api.permissions.contains({ origins: [u.origin + "/*"] });
+        if (!granted && !await api.permissions.request({ origins: [u.origin + "/*"] })) {
+          throw new Error("Allow access to the selected server to connect.");
+        }
       }
     } catch (err) {
       setStatus(`Invalid endpoint: ${err.message}`, "err");
@@ -123,10 +124,11 @@ projectSelect.addEventListener("change", async () => {
 document.querySelector("#test-btn").addEventListener("click", async () => {
   setStatus("Testing…");
   try {
-    await saveForm();
+    if (!await saveForm()) return;
     const cfg = await settings();
     const result = await testConnection(cfg);
-    const perms = ["capture", "retrieval", "writing"].filter((k) => result[k]);
+    const permissions = result.permissions || result;
+    const perms = ["capture", "retrieval", "writing"].filter((k) => permissions[k]);
     setStatus(`✓ Connected. Permissions: ${perms.join(", ") || "none"}`, "ok");
     await loadProjects(cfg);
   } catch (err) {

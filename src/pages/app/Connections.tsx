@@ -242,10 +242,19 @@ export function Connections() {
       <Notice>
         {selfHosted
           ? "Use a scoped token with the local Python MCP server, existing CLI, or the authorized browser extension. Enable capture separately for extension credentials; provider OAuth is not configured."
-          : "Connection method: scoped token over the Continuum CLI or local MCP server. No provider OAuth or automatic chat capture is available."}
+          : "Use a scoped token with the Continuum CLI, MCP server, or authorized browser extension. Enable capture for the extension; provider OAuth is not configured."}{" "}
         Provider names identify your intended source or client; live provider
         compatibility has not been verified.
       </Notice>
+      <details className="notice">
+        <summary>Set up browser capture and IDE access</summary>
+        <ol>
+          <li>Create a connection with conversation capture enabled and copy its token once.</li>
+          <li>Load the built browser extension, open its Settings, and enter the token. Use the same backend as this workspace{selfHosted ? " (http://127.0.0.1:8000 for the default self-hosted setup)" : " (the workspace?s Supabase project URL)"}.</li>
+          <li>Enable your providers and auto-capture, then test the connection. Open a saved chat and check its capture status.</li>
+          <li>For IDE access, configure an MCP client with a separate connection that has retrieval and conversation history permissions. Ask it to retrieve a conversation by ID; each read fetches current permitted content.</li>
+        </ol>
+      </details>
       <p>
         <Link className="text-link" to="/app/conversations">
           Import a conversation as a workspace member
