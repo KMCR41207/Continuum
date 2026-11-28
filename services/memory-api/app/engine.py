@@ -71,28 +71,60 @@ def propose(db, workspace, project, content, category="Facts", tags=None, sensit
 def ingest(db, identity, workspace, project, raw):
     authorize(db, identity, workspace, "capture", project)
     data = ConversationInput.model_validate(raw)
+    # Provider chats use a stable source address; imports without one retain
+    # content-based deduplication. Do not overwrite messages with linked evidence.
+    from urllib.parse import urlsplit
+    url = data.metadata.get("url", "")
+    parsed = urlsplit(url) if isinstance(url, str) else None
+    valid_url = bool(parsed and parsed.scheme == "https" and (
+        (data.platform == "chatgpt" and parsed.hostname == "chatgpt.com" and re.search(r"(?:^|/)c/[\w-]+$", parsed.path)) or
+        (data.platform == "claude" and parsed.hostname == "claude.ai" and re.fullmatch(r"/chat/[\w-]+", parsed.path))))
+    canonical = f"https://{parsed.hostname}{parsed.path}" if valid_url else ""
     content_hash = hashlib.sha256(json.dumps(data.model_dump(), sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-    key = hash_text((project or "global") + content_hash)
+    key = hash_text((project or "global") + ("|chat|" + canonical if canonical else content_hash))
     existing = db.scalar(select(Conversation).where(Conversation.workspace_id == workspace, Conversation.scope_hash == key))
-    if existing:
+    if not existing and canonical:
+        existing = next((v for v in db.scalars(select(Conversation).where(Conversation.workspace_id == workspace, Conversation.project_id == project, Conversation.platform == data.platform)) if v.source_metadata.get("url") == canonical), None)
+    if existing and not canonical:
         return {"id": existing.id, "duplicate": True, "proposals": 0}
-    conversation = Conversation(workspace_id=workspace, project_id=project, title=data.title, platform=data.platform, scope_hash=key, message_count=len(data.messages), source_metadata=data.metadata)
-    db.add(conversation)
-    db.flush()
-    messages = []
-    for i, message in enumerate(data.messages):
-        saved = Message(workspace_id=workspace, conversation_id=conversation.id, position=i, role=message.role, content=message.content, source_metadata=message.metadata)
+    conversation = existing or Conversation(workspace_id=workspace, project_id=project, title=data.title, platform=data.platform, scope_hash=key, message_count=0, source_metadata=data.metadata)
+    if existing and existing.excluded:
+        deny("Conversation is excluded from capture", 403)
+    if not existing:
+        db.add(conversation)
+        db.flush()
+    messages = list(db.scalars(select(Message).where(Message.conversation_id == conversation.id).order_by(Message.position)))
+    overlap = min(len(messages), len(data.messages))
+    if any((messages[i].role, messages[i].content) != (data.messages[i].role, data.messages[i].content) for i in range(overlap)):
+        deny("Earlier messages changed; import requires review", 409)
+    if existing and len(data.messages) < len(messages):
+        return {"id": existing.id, "duplicate": True, "proposals": 0}
+    first_new = len(messages)
+    for i in range(first_new, len(data.messages)):
+        message = data.messages[i]
+        metadata = dict(message.metadata)
+        if message.attachments:
+            metadata["attachments"] = message.attachments
+        saved = Message(workspace_id=workspace, conversation_id=conversation.id, position=i, role=message.role, content=message.content, source_metadata=metadata)
         db.add(saved)
         messages.append(saved)
     db.flush()
     count = 0
     for index, content, category, sensitivity in extraction(data.messages):
+        if index < first_new:
+            continue
         memory = propose(db, workspace, project, content, category, sensitivity=sensitivity)
         db.add(Source(workspace_id=workspace, memory_id=memory.id, conversation_id=conversation.id, message_id=messages[index].id, evidence=content, source_reference=str(data.metadata.get("url", ""))))
         count += 1
-    conversation.processing_status = "review" if count else "complete"
-    audit(db, identity, workspace, "Conversation imported", "conversation", conversation.id)
-    return {"id": conversation.id, "duplicate": False, "proposals": count}
+    conversation.title = data.title
+    conversation.message_count = len(messages)
+    conversation.source_metadata = data.metadata
+    if count:
+        conversation.processing_status = "review"
+    elif not existing:
+        conversation.processing_status = "complete"
+    audit(db, identity, workspace, "Conversation updated" if existing else "Conversation imported", "conversation", conversation.id)
+    return {"id": conversation.id, "duplicate": bool(existing and first_new == len(messages)), "proposals": count}
 
 
 def permitted_conversation(db, identity, conversation):
