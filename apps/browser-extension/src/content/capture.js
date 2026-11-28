@@ -351,17 +351,30 @@
           role: node.getAttribute("data-message-author-role"),
           attributes: [...node.attributes].map((attr) => attr.name),
         }));
+        // Keep controls outside the scrollable details so they never disappear.
+        document.getElementById("continuum-inspector")?.remove();
         const panel = document.createElement("div");
-        panel.style.cssText = "position:fixed;inset:10% 15%;z-index:2147483647;background:#111b2c;color:white;padding:20px;border:1px solid #8293ad;border-radius:12px;overflow:auto;font:12px monospace;white-space:pre-wrap";
+        panel.id = "continuum-inspector";
+        panel.setAttribute("role", "dialog");
+        panel.setAttribute("aria-label", "Message structure");
+        panel.style.cssText = "position:fixed;inset:10% 15%;z-index:2147483647;background:#111b2c;color:white;border:1px solid #8293ad;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;font:12px monospace";
+        const header = document.createElement("div");
+        header.style.cssText = "display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid #8293ad";
         const close = document.createElement("button");
+        close.type = "button";
         close.textContent = "Close";
         close.style.cssText = "padding:8px;cursor:pointer";
-        close.onclick = () => panel.remove();
+        const dismiss = () => { panel.remove(); document.removeEventListener("keydown", onKey); };
+        const onKey = (event) => { if (event.key === "Escape") dismiss(); };
+        close.addEventListener("click", dismiss);
+        document.addEventListener("keydown", onKey);
         const pre = document.createElement("pre");
-        pre.style.cssText = "white-space:pre-wrap;word-break:break-word";
+        pre.style.cssText = "margin:0;padding:20px;overflow:auto;white-space:pre-wrap;word-break:break-word";
         pre.textContent = JSON.stringify(details, null, 2);
-        panel.append(close, document.createTextNode("  Message structure ? no message text"), pre);
+        header.append(close, document.createTextNode("Message structure ? no message text"));
+        panel.append(header, pre);
         (document.body || document.documentElement).append(panel);
+        close.focus();
         setBadge("Continuum: structure ready", "#1a4a1a");
       };
       document.addEventListener("click", inspect, { capture: true, once: true });
