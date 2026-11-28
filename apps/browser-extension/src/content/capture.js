@@ -223,7 +223,10 @@
       if (!messages) {
         if (!automatic) setBadge("Continuum: no messages found", "#5a3a1a");
         else { clearTimeout(captureTimer); captureTimer = setTimeout(() => sync(true), 5000); }
-        return { error: "No messages found on this page." };
+        const counts = provider === "chatgpt"
+          ? `roles ${document.querySelectorAll("[data-message-author-role]").length}, turns ${document.querySelectorAll('[data-testid^="conversation-turn"]').length}, articles ${document.querySelectorAll("main article").length}`
+          : `user ${document.querySelectorAll('[data-testid="user-message"]').length}, responses ${document.querySelectorAll(".font-claude-response").length}`;
+        return { error: `No messages found (${counts}). Refresh the page after reloading the extension.` };
       }
       if (messages.length === 0) {
         if (!automatic) setBadge("Continuum: conversation is empty");
