@@ -25,11 +25,15 @@ export function ActivityPage() {
     p_days: days,
   });
 
-  const maxCount =
-    r.data?.by_agent.reduce((m, a) => Math.max(m, a.count), 1) ?? 1;
+  // A backend may be missing this RPC or return an incompatible response.
+  // Validate before rendering so the workspace does not become a blank page.
+  const data = r.data && Array.isArray(r.data.daily) && Array.isArray(r.data.by_agent) &&
+    Array.isArray(r.data.recent_lookups) && typeof r.data.total === "number" ? r.data : null;
+  const invalidData = r.data !== null && !data;
+  const maxCount = data?.by_agent.reduce((m, a) => Math.max(m, a.count), 1) ?? 1;
 
   // Build a 12-week heatmap grid (84 cells, most-recent day last)
-  const dailyMap = new Map(r.data?.daily.map((d) => [d.date, d.count]) ?? []);
+  const dailyMap = new Map(data?.daily.map((d) => [d.date, d.count]) ?? []);
   const today = new Date();
   const cells: { date: string; count: number }[] = [];
   for (let i = 83; i >= 0; i--) {
@@ -75,16 +79,17 @@ export function ActivityPage() {
       </div>
 
       {r.error && <Notice error>{r.error}</Notice>}
+      {invalidData && <Notice error>Activity data is unavailable: the server returned an unexpected response. Check that the database migrations are installed.</Notice>}
       {r.loading && <p role="status">Loading activity…</p>}
 
       {selfHosted && (
         <Notice>Activity data requires the Supabase backend. This feature is not available in self-hosted mode.</Notice>
       )}
 
-      {r.data && (
+      {data && (
         <>
           <section className="app-section">
-            <h2>12-week overview · {r.data.total.toLocaleString()} total requests</h2>
+            <h2>12-week overview · {data.total.toLocaleString()} total requests</h2>
             <div className="heatmap" aria-label="Activity heatmap">
               {weeks.map((week, wi) => (
                 <div className="heatmap-week" key={wi}>
@@ -101,11 +106,11 @@ export function ActivityPage() {
             </div>
           </section>
 
-          {r.data.by_agent.length > 0 && (
+          {data.by_agent.length > 0 && (
             <section className="app-section">
               <h2>By agent</h2>
               <div className="activity-bars">
-                {r.data.by_agent.map((agent) => (
+                {data.by_agent.map((agent) => (
                   <div className="activity-bar-row" key={agent.connection_id}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {agent.name}
@@ -123,11 +128,11 @@ export function ActivityPage() {
             </section>
           )}
 
-          {r.data.recent_lookups.length > 0 && (
+          {data.recent_lookups.length > 0 && (
             <section className="app-section">
               <h2>Recent lookups</h2>
               <div className="activity-feed">
-                {r.data.recent_lookups.map((item, i) => (
+                {data.recent_lookups.map((item, i) => (
                   <div className="activity-feed-item" key={i}>
                     <time dateTime={item.at}>
                       {new Date(item.at).toLocaleString()}
@@ -142,7 +147,7 @@ export function ActivityPage() {
             </section>
           )}
 
-          {r.data.total === 0 && (
+          {data.total === 0 && (
             <p>No agent activity recorded in the last {days} days.</p>
           )}
         </>
