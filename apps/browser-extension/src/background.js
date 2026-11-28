@@ -4,6 +4,10 @@ import { normalizedConversation, contentHash, withoutAttachments } from "./lib/n
 
 let serial = Promise.resolve();
 
+function destinationKey(endpoint, project, url) {
+  return JSON.stringify([endpoint, project || "", url]);
+}
+
 async function record(status) {
   const config = await settings();
   await save({ history: [{ at: new Date().toISOString(), status }, ...config.history].slice(0, 50) });
@@ -34,6 +38,7 @@ async function flush() {
       await save({
         queue: latest.queue.filter((q) => q.hash !== item.hash),
         sent: [...latest.sent, item.hash].slice(-200),
+        lastSent: Object.fromEntries(Object.entries({ ...latest.lastSent, [destinationKey(item.endpoint, item.project, item.conversation.metadata.url)]: item.hash }).slice(-200)),
       });
       const projectName = item.projectName ? ` → ${item.projectName}` : "";
       await record(`Saved to Continuum${projectName}. Review memories in Continuum.`);
@@ -108,17 +113,18 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
         return { error: `Content error: ${err.message}` };
       }
 
-      const hash = await contentHash(conversation);
+      const destination = destinationKey(config.endpoint, config.project, conversation.metadata.url);
+      const hash = await contentHash({ ...conversation, destination });
 
       // Duplicate check — already sent
-      if (config.sent.includes(hash)) {
+      if (config.lastSent[destination] === hash) {
         return { status: "Already captured. No duplicate created." };
       }
 
       // Duplicate check — already queued
       if (!config.queue.some((q) => q.hash === hash)) {
         // A newer snapshot of the same chat supersedes any older queued one.
-        const queue = config.queue.filter((q) => q.conversation?.metadata?.url !== conversation.metadata.url);
+        const queue = config.queue.filter((q) => destinationKey(q.endpoint, q.project, q.conversation?.metadata?.url) !== destination);
         if (queue.length >= 20) {
           return { error: "Queue full. Check network and retry later." };
         }
@@ -144,7 +150,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
 
       // Check if it went through
       const after = await settings();
-      if (after.sent.includes(hash)) {
+      if (after.lastSent[destination] === hash) {
         const projectName = config.projectName ? ` → ${config.projectName}` : "";
         return { status: `Saved to Continuum${projectName}.` };
       }
@@ -152,7 +158,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
       const queued = after.queue.find((q) => q.hash === hash);
       if (queued && queued.attempts > 0) {
         const last = after.history[0]?.status || "Upload failed.";
-        return { error: `${last} Will retry automatically.` };
+        return { error: queued.attempts >= 5 ? `${last} Open settings to retry.` : `${last} Will retry automatically.` };
       }
 
       return { status: "Queued for upload." };

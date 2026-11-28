@@ -126,4 +126,16 @@ test("background capture enforces consent, platform, pause, automatic opt-in, au
   state.consent = false;
   assert.ok((await send()).error);
   assert.equal(requests.length, 3);
+
+  // Reverting to an earlier snapshot must be uploaded again.
+  state.consent = true;
+  await send(message);
+  assert.equal(requests.length, 4);
+  assert.equal(JSON.parse(requests[3].options.body).conversation.messages[0].content, message.messages[0].content);
+
+  // An unchanged snapshot sent to a different project is a new destination.
+  state.project = "another-project";
+  await send(message);
+  assert.equal(requests.length, 5);
+  assert.equal(JSON.parse(requests[4].options.body).project_id, "another-project");
 });

@@ -94,7 +94,7 @@ export async function contentHash(conversation) {
   const bytes = new TextEncoder().encode(
     JSON.stringify({
       ...conversation,
-      metadata: { url: conversation.metadata?.url || "" },
+      metadata: { ...conversation.metadata, captured_at: undefined },
     })
   );
   return Array.from(

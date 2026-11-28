@@ -146,7 +146,7 @@ document.querySelector("#retry").addEventListener("click", async () => {
 
 // ── Clear ─────────────────────────────────────────────────────────────────────
 document.querySelector("#clear").addEventListener("click", async () => {
-  await save({ queue: [], history: [], sent: [] });
+  await save({ queue: [], history: [], sent: [], lastSent: {} });
   historyEl.textContent = "No history yet.";
   setStatus("Cleared.", "ok");
 });

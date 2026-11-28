@@ -246,7 +246,7 @@
       }
 
       // Deduplicate by content (per chat address)
-      const key = location.pathname + JSON.stringify(messages);
+      const key = JSON.stringify([location.pathname, document.title, providerProject(), status.project, messages]);
       if (automatic && key === lastHash) return;
 
       setBadge("Continuum: capturing…", "#1a3a5c");
@@ -306,6 +306,14 @@
   updateStatus();
   // Capture an already-loaded conversation even without subsequent DOM changes.
   captureTimer = setTimeout(() => sync(true), 2500);
+
+  // Re-evaluate the open chat when capture settings or its destination change.
+  api.storage?.onChanged?.addListener((changes, area) => {
+    if (area !== "local" || !["project", "endpoint", "token", "consent", "auto", "paused", provider, "captureFiles"].some((key) => key in changes)) return;
+    lastHash = "";
+    clearTimeout(captureTimer);
+    captureTimer = setTimeout(() => sync(true), 2500);
+  });
 
   // ── URL change detection (conversation switching) ────────────────────────
   function onUrlChange() {

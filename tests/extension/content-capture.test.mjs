@@ -70,9 +70,11 @@ test('new ChatGPT layout captures users and responses in order and updates autom
     await page.route('https://chatgpt.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>Chat</title><main><div data-user-message-bubble><div class="text-size-chat whitespace-pre-wrap">Question</div></div><div data-dil-response><div data-testid="chatgpt-writing-block"><div data-markdown-copy-content>Answer</div></div></div></main>' }));
     await page.addInitScript(() => {
       window.captures = [];
+      window.captureStatus = { connected: true, active: true, auto: true, project: "one" };
+      window.chrome.storage = { onChanged: { addListener(fn) { window.onStorageChanged = fn; } } };
       window.chrome.runtime = {
         sendMessage(message, callback) {
-          if (message.type === 'status') callback({ connected: true, active: true, auto: true });
+          if (message.type === 'status') callback(window.captureStatus);
           else { window.captures.push(message); callback({ status: 'Saved' }); }
         },
         onMessage: { addListener() {} },
@@ -87,5 +89,10 @@ test('new ChatGPT layout captures users and responses in order and updates autom
     await page.locator('[data-markdown-copy-content]').evaluate(el => { el.textContent = 'Updated answer'; });
     await page.waitForFunction(() => window.captures.length === 2, null, { timeout: 8000 });
     assert.equal(await page.evaluate(() => window.captures[1].messages[1].content), 'Updated answer');
+    // A destination change recaptures even if the chat DOM has not changed.
+    await page.evaluate(() => { window.captureStatus.project = "two"; window.onStorageChanged({ project: { oldValue: "one", newValue: "two" } }, "local"); });
+    await page.waitForFunction(() => window.captures.length === 3, null, { timeout: 8000 });
+    await page.evaluate(() => window.onStorageChanged({ endpoint: { oldValue: "a", newValue: "b" } }, "local"));
+    await page.waitForFunction(() => window.captures.length === 4, null, { timeout: 8000 });
   } finally { await browser.close(); }
 });

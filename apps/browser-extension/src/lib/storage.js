@@ -27,6 +27,7 @@ export const defaults = {
   queue: [],
   history: [],
   sent: [],
+  lastSent: {},
 };
 
 export async function settings() {
