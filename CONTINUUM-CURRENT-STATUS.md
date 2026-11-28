@@ -32,10 +32,10 @@ Owner = you (needs your login, browser or accounts). Claude = can be done in a s
 
 | # | Task | Who | Detail |
 |---|---|---|---|
-| A1 | Revoke the leaked capture token (`ctm_c08c…`) | Owner | Continuum → Connections → open the connection → Revoke. It is in public git history (commit `fda69a7`) and still in `.env.server`. |
-| A2 | Create a new token and put it in `.env.server` | Owner | Never paste it in chat or commit it. |
-| A3 | Make the GitHub repo private | Owner | GitHub → Settings → General → Danger Zone → Change visibility. Do this before pushing. |
-| A4 | Optional: remove the old token from git history | Owner + Claude | Needs a force push (`git filter-repo`); only useful after A1. |
+| A1 | Revoke the leaked capture token (`ctm_c08c…`) | ✅ Done | Token revoked in Connections. |
+| A2 | Create a new token and put it in `.env.server` | ✅ Done | New token active in `.env.server`. |
+| A3 | Make the GitHub repo private | ✅ Done | Repo is now private. |
+| A4 | Remove the old token from git history | ✅ Done | `git filter-repo` rewrote all 142 commits; force-pushed to remote. Token `ctm_c08c…` is gone from all history. |
 
 **B. Get the work onto GitHub**
 
